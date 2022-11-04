@@ -1,6 +1,14 @@
-#include <ENB/ENBSeriesAPI.h>
 
-#include "DRS.h"
+/***************SKSE PLUGIN***************/
+
+#include "Plugin.h"
+#include <ENB/ENBSeriesAPI.h>
+#include <DRS.h>
+#include <SkyrimUpscaler.h>
+
+void PatchD3D11();
+
+/* Upscaler Parameters */
 
 ENB_API::ENBSDKALT1001* g_ENB = nullptr;
 
@@ -17,15 +25,15 @@ static void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 		break;
 	}
 	DRS::GetSingleton()->MessageHandler(a_msg);
+	SkyrimUpscaler::GetSingleton()->MessageHandler(a_msg);
 }
-
-void PatchD3D11();
 
 void Init()
 {
 	SKSE::GetMessagingInterface()->RegisterListener(MessageHandler);
-	PatchD3D11();
 	DRS::InstallHooks();
+	UpscalerHooks::Install();
+	PatchD3D11();
 	MenuOpenCloseEventHandler::Register();
 }
 
@@ -76,8 +84,8 @@ EXTERN_C [[maybe_unused]] __declspec(dllexport) bool SKSEAPI SKSEPlugin_Load(con
 
 EXTERN_C [[maybe_unused]] __declspec(dllexport) constinit auto SKSEPlugin_Version = []() noexcept {
 	SKSE::PluginVersionData v;
-	v.PluginName("PluginName");
-	v.PluginVersion({ 1, 0, 0, 0 });
+	v.PluginName(Plugin::NAME);
+	v.PluginVersion(Plugin::VERSION);
 	v.UsesAddressLibrary(true);
 	v.HasNoStructUse(true);
 	return v;

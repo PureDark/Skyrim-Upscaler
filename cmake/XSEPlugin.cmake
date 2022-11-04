@@ -93,7 +93,7 @@ if (CMAKE_GENERATOR MATCHES "Visual Studio")
 			/MP
 			/await
 			/W4
-			/WX
+			/WX-
 			/permissive-
 			/Zc:alignedNew
 			/Zc:auto
@@ -115,6 +115,7 @@ if (CMAKE_GENERATOR MATCHES "Visual Studio")
 			/Zc:trigraphs
 			/Zc:wchar_t
 			/wd4200 # nonstandard extension used : zero-sized array in struct/union
+			/utf-8
 	)
 
 	target_compile_options(${PROJECT_NAME} PUBLIC "$<$<CONFIG:DEBUG>:/fp:strict>")
@@ -134,6 +135,7 @@ endif()
 
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(magic_enum CONFIG REQUIRED)
+find_package(imgui CONFIG REQUIRED)
 
 if (BUILD_SKYRIM)
 	find_package(CommonLibSSE REQUIRED)
@@ -141,12 +143,13 @@ if (BUILD_SKYRIM)
 		${PROJECT_NAME} 
 		PUBLIC 
 			CommonLibSSE::CommonLibSSE
+			imgui::imgui
 		PRIVATE
-			nlohmann_json::nlohmann_json
 			magic_enum::magic_enum
 			debug ${CMAKE_CURRENT_SOURCE_DIR}/extern/detours/x64/Debug/detours.lib
 			optimized ${CMAKE_CURRENT_SOURCE_DIR}/extern/detours/x64/Release/detours.lib
-			optimized ${CMAKE_CURRENT_SOURCE_DIR}/extern/nvapi/nvapi64.lib
+			debug ${CMAKE_CURRENT_SOURCE_DIR}/extern/PDPerfPlugin.lib
+			optimized ${CMAKE_CURRENT_SOURCE_DIR}/extern/PDPerfPlugin.lib
 	)
 else()
 	add_subdirectory(${CommonLibPath} ${CommonLibName} EXCLUDE_FROM_ALL)

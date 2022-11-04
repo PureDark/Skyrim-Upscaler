@@ -13,7 +13,11 @@
                 "commonlibsse-ng",
                 "nlohmann-json",
                 "simpleini",
-                "magic-enum"
+                "magic-enum",
+                {
+                    "name": "imgui",
+                    "features": ["dx11-binding", "win32-binding"]
+                }
             ]
         }
     },
