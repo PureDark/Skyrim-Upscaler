@@ -7,6 +7,35 @@
 #include <SimpleIni.h>
 #include <RE/BSGraphics.h>
 
+struct UnkOuterStruct
+{
+	struct UnkInnerStruct
+	{
+		uint8_t unk00[0x18];  // 00
+		bool    bTAA;         // 18
+	};
+
+	// members
+	uint8_t         unk00[0x1F0];    // 00
+	UnkInnerStruct* unkInnerStruct;  // 1F0
+
+	static UnkOuterStruct* GetSingleton()
+	{
+		REL::Relocation<UnkOuterStruct*> instance{ RELOCATION_ID(527731, 414660) };  // 31D11A0, 326B280
+		return instance.get();
+	}
+
+	bool GetTAA() const
+	{
+		return unkInnerStruct->bTAA;
+	}
+
+	void SetTAA(bool a_enabled)
+	{
+		unkInnerStruct->bTAA = a_enabled;
+	}
+};
+
 class SkyrimUpscaler
 {
 public:
@@ -123,11 +152,13 @@ struct UpscalerHooks
 		stl::write_thunk_call<BSGraphics_Renderer_Begin_UpdateJitter>(REL::RelocationID(75460, 77226).address() + REL::Relocate(0xE5, 0xE5));
 		// Get depth and motion buffers
 		stl::write_thunk_call<BSShaderRenderTargets_Create_MotionVector>(REL::RelocationID(100458, 107175).address() + REL::Relocate(0xADF, 0xADF));
-		// Enable TAA jitters without TAA
+		// Always enable TAA jitters, even without TAA
 		static REL::Relocation<uintptr_t> updateJitterHook{ REL::RelocationID(75709, 77518) };          // D7CFB0, DB96E0
 		static REL::Relocation<uintptr_t> buildCameraStateDataHook{ REL::RelocationID(75711, 77520) };  // D7D130, DB9850
-		REL::safe_write<uint8_t>(updateJitterHook.address() + REL::Relocate(0x11, 0x14), 1);
-		REL::safe_write<uint8_t>(buildCameraStateDataHook.address() + REL::Relocate(0x1D8, 0x1D8), 1);
+		uint8_t                           patch1[] = { 0x90, 0x90, 0x90, 0x90, 0x90, 0x90 };
+		uint8_t                           patch2[] = { 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90 };
+		REL::safe_write<uint8_t>(updateJitterHook.address() + REL::Relocate(0xE, 0x11), patch1);
+		REL::safe_write<uint8_t>(buildCameraStateDataHook.address() + REL::Relocate(0x1D5, 0x1D5), patch2);
 		logger::info("Installed upscaler hooks");
 	}
 };
