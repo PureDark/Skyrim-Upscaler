@@ -67,22 +67,12 @@ void SettingGUI::OnRender()
 {
 	// Our state
 	ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
-	if (ImGui::IsKeyReleased(ImGuiKey_Home)) {
-		logger::warn("Home Pressed!");
-		toggle();
-	}
 	
-	if (ImGui::IsKeyReleased(ImGuiKey_End)) {
-		logger::warn("End Pressed!");
+	if (ImGui::IsKeyReleased(mToggleHotkey))
 		toggle();
-	}
 
 	auto&  io = ImGui::GetIO();
 	io.MouseDrawCursor = mShowGUI;
-
-	auto controlMap = RE::ControlMap::GetSingleton();
-	if (controlMap)
-		controlMap->ignoreKeyboardMouse = mShowGUI;
 
 	// Start the Dear ImGui frame
 	ImGui_ImplDX11_NewFrame();

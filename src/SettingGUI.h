@@ -19,11 +19,12 @@ class SettingGUI
 {
 public:
 	//Reserve the second value for VR
-	IDXGISwapChain*                                              mSwapChain;
-	ID3D11Device*                                                mDevice;
-	bool                                                         mShowGUI = true;
-	std::vector<motion_item>                                     sorted_item_list;
-	motion_item                                                  selected_item;
+	IDXGISwapChain*          mSwapChain;
+	ID3D11Device*            mDevice;
+	bool                     mShowGUI{false};
+	std::vector<motion_item> sorted_item_list;
+	motion_item              selected_item;
+	int                      mToggleHotkey{ ImGuiKey_End };
 
 	~SettingGUI() {}
 
@@ -41,6 +42,9 @@ public:
 	void ForceEnabled(bool enabled)
 	{
 		mShowGUI = enabled;
+		auto controlMap = RE::ControlMap::GetSingleton();
+		if (controlMap)
+			controlMap->ignoreKeyboardMouse = enabled;
 	}
 
 	void InitIMGUI(IDXGISwapChain* swapchain, ID3D11Device* device, ID3D11DeviceContext* context);

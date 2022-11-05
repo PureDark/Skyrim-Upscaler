@@ -23,6 +23,7 @@ void SkyrimUpscaler::LoadINI()
 	GetSettingInt("Settings", mQualityLevel, 0);
 	mUpscaleType = std::clamp(mUpscaleType, 0, 3);
 	mQualityLevel = std::clamp(mQualityLevel, 0, 3);
+	GetSettingInt("Hotkeys", SettingGUI::GetSingleton()->mToggleHotkey, ImGuiKey_End);
 }
 void SkyrimUpscaler::SaveINI()
 {
@@ -32,6 +33,7 @@ void SkyrimUpscaler::SaveINI()
 	SetSettingBool("Settings", mEnableUpscaler);
 	SetSettingInt("Settings", mUpscaleType);
 	SetSettingInt("Settings", mQualityLevel);
+	SetSettingInt("Hotkeys", SettingGUI::GetSingleton()->mToggleHotkey);
 }
 
 void SkyrimUpscaler::MessageHandler(SKSE::MessagingInterface::Message* a_msg)
@@ -99,7 +101,7 @@ void SkyrimUpscaler::EvaluateUpscaler()
 
 bool SkyrimUpscaler::IsEnabled()
 {
-	return mEnableUpscaler && !RE::UI::GetSingleton()->GameIsPaused();
+	return mEnableUpscaler && !RE::UIBlurManager::GetSingleton()->blurCount > 0;
 }
 
 
