@@ -21,7 +21,7 @@ struct UnkOuterStruct
 
 	static UnkOuterStruct* GetSingleton()
 	{
-		REL::Relocation<UnkOuterStruct*> instance{ RELOCATION_ID(527731, 414660) };  // 31D11A0, 326B280
+		REL::Relocation<UnkOuterStruct*&> instance{ RELOCATION_ID(527731, 414660) };  // 31D11A0, 326B280
 		return instance.get();
 	}
 
