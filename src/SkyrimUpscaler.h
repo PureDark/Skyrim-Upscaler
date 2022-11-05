@@ -7,6 +7,35 @@
 #include <SimpleIni.h>
 #include <RE/BSGraphics.h>
 
+struct UnkOuterStruct
+{
+	struct UnkInnerStruct
+	{
+		uint8_t unk00[0x18];  // 00
+		bool    bTAA;         // 18
+	};
+
+	// members
+	uint8_t         unk00[0x1F0];    // 00
+	UnkInnerStruct* unkInnerStruct;  // 1F0
+
+	static UnkOuterStruct* GetSingleton()
+	{
+		REL::Relocation<UnkOuterStruct*> instance{ RELOCATION_ID(527731, 414660) };  // 31D11A0, 326B280
+		return instance.get();
+	}
+
+	bool GetTAA() const
+	{
+		return unkInnerStruct->bTAA;
+	}
+
+	void SetTAA(bool a_enabled)
+	{
+		unkInnerStruct->bTAA = a_enabled;
+	}
+};
+
 class SkyrimUpscaler
 {
 public:
