@@ -6,8 +6,6 @@
 #include <DRS.h>
 #include <SkyrimUpscaler.h>
 
-void PatchD3D11();
-
 /* Upscaler Parameters */
 
 ENB_API::ENBSDKALT1001* g_ENB = nullptr;
@@ -15,13 +13,16 @@ ENB_API::ENBSDKALT1001* g_ENB = nullptr;
 static void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 {
 	switch (a_msg->type) {
+	case SKSE::MessagingInterface::kDataLoaded:
+		RE::BSInputDeviceManager::GetSingleton()->AddEventSink(InputListener::GetSingleton());
+		logger::info("Input listener registered");
+		break;
 	case SKSE::MessagingInterface::kPostLoad:
 		g_ENB = reinterpret_cast<ENB_API::ENBSDKALT1001*>(ENB_API::RequestENBAPI(ENB_API::SDKVersion::V1001));
 		if (g_ENB) {
 			logger::info("Obtained ENB API");
 		} else
 			logger::info("Unable to acquire ENB API");
-
 		break;
 	}
 	DRS::GetSingleton()->MessageHandler(a_msg);
@@ -32,8 +33,7 @@ void Init()
 {
 	SKSE::GetMessagingInterface()->RegisterListener(MessageHandler);
 	DRS::InstallHooks();
-	UpscalerHooks::Install();
-	PatchD3D11();
+	InstallUpscalerHooks();
 	MenuOpenCloseEventHandler::Register();
 }
 

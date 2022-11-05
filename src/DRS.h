@@ -5,10 +5,6 @@
 #include <PCH.h>
 #include <ENB/ENBSeriesAPI.h>
 
-extern ID3D11DeviceContext* g_DeviceContext;
-extern ID3D11Device*        g_Device;
-extern IDXGISwapChain*      g_SwapChain;
-
 class MenuOpenCloseEventHandler : public RE::BSTEventSink<RE::MenuOpenCloseEvent>
 {
 public:

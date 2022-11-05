@@ -2,6 +2,7 @@
 
 #include <ENB/AntTweakBar.h>
 #include <ENB/ENBSeriesAPI.h>
+#include <SkyrimUpscaler.h>
 extern ENB_API::ENBSDKALT1001* g_ENB;
 
 void DRS::GetGameSettings()
@@ -23,14 +24,14 @@ void DRS::Update()
 		ResetScale();
 		return;
 	}
-	else if (const auto ui = RE::UI::GetSingleton(); !(ui && ui->GameIsPaused())) { // Ignore paused game which skews frametimes
+	else {
 		ControlResolution();
 	}
 }
 
 void DRS::ControlResolution()
 {
-	currentScaleFactor = targetScaleFactor;
+	currentScaleFactor = SkyrimUpscaler::GetSingleton()->IsEnabled()?targetScaleFactor:1.0f;
 }
 
 void DRS::ResetScale()
@@ -81,7 +82,8 @@ void DRS::MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 
 RE::BSEventNotifyControl MenuOpenCloseEventHandler::ProcessEvent(const RE::MenuOpenCloseEvent* a_event, RE::BSTEventSource<RE::MenuOpenCloseEvent>*)
 {
-	if (a_event->menuName == RE::LoadingMenu::MENU_NAME) {
+	if (a_event->menuName == RE::LoadingMenu::MENU_NAME ||
+		a_event->menuName == RE::RaceSexMenu::MENU_NAME) {
 		if (a_event->opening) {
 			DRS::GetSingleton()->reset = true;
 			DRS::GetSingleton()->ResetScale();
@@ -92,15 +94,6 @@ RE::BSEventNotifyControl MenuOpenCloseEventHandler::ProcessEvent(const RE::MenuO
 	}
 	else if (a_event->menuName == RE::FaderMenu::MENU_NAME) {
 		if (!a_event->opening) {
-			DRS::GetSingleton()->reset = false;
-			DRS::GetSingleton()->ControlResolution();
-		}
-	}
-	else if (a_event->menuName == RE::RaceSexMenu::MENU_NAME) {
-		if (a_event->opening) {
-			DRS::GetSingleton()->reset = true;
-			DRS::GetSingleton()->ResetScale();
-		} else {
 			DRS::GetSingleton()->reset = false;
 			DRS::GetSingleton()->ControlResolution();
 		}

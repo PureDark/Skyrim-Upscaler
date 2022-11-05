@@ -21,6 +21,8 @@ void SkyrimUpscaler::LoadINI()
 	GetSettingBool("Settings", mEnableUpscaler, false);
 	GetSettingInt("Settings", mUpscaleType, 0);
 	GetSettingInt("Settings", mQualityLevel, 0);
+	mUpscaleType = std::clamp(mUpscaleType, 0, 3);
+	mQualityLevel = std::clamp(mQualityLevel, 0, 3);
 }
 void SkyrimUpscaler::SaveINI()
 {
@@ -70,13 +72,17 @@ void SkyrimUpscaler::EvaluateUpscaler()
 	static const float Rad2Deg = 57.29578f;
 	static float&      g_fNear = (*(float*)(RELOCATION_ID(517032, 403540).address() + 0x40));  // 2F26FC0, 2FC1A90
 	static float&      g_fFar = (*(float*)(RELOCATION_ID(517032, 403540).address() + 0x44));   // 2F26FC4, 2FC1A94
+	static bool        lastEnable = false;
 
 	if (mSwapChain != nullptr) {
 		ID3D11Texture2D* back_buffer;
 		mSwapChain->GetBuffer(0, IID_PPV_ARGS(&back_buffer));
 		if (back_buffer != nullptr && mDepthBuffer != nullptr && mMotionVectors != nullptr) {
 			ID3D11Texture2D* motionVectorTex = (RE::UI::GetSingleton()->GameIsPaused() ? mMotionVectorsEmpty : mMotionVectors);
-			if (mEnableUpscaler && !DRS::GetSingleton()->reset) {
+			bool             enable = IsEnabled();
+			bool delayOneFrame = (lastEnable && !enable);
+			if ((IsEnabled() && !DRS::GetSingleton()->reset) || delayOneFrame) {
+				lastEnable = enable;
 				ID3D11DeviceContext* context;
 				mD3d11Device->GetImmediateContext(&context);
 				// For DLSS to work in borderless mode we must copy the backbuffer to a temporally texture
@@ -90,6 +96,12 @@ void SkyrimUpscaler::EvaluateUpscaler()
 		}
 	}
 }
+
+bool SkyrimUpscaler::IsEnabled()
+{
+	return mEnableUpscaler && !RE::UI::GetSingleton()->GameIsPaused();
+}
+
 
 void SkyrimUpscaler::GetJitters(float* out_x, float* out_y)
 {
@@ -116,14 +128,17 @@ void SkyrimUpscaler::SetMotionScale(float x, float y)
 void SkyrimUpscaler::SetEnabled(bool enabled)
 {
 	mEnableUpscaler = enabled;
-	if (mEnableUpscaler) {
+	// TAA = 3
+	if (mEnableUpscaler && mUpscaleType != 3) {
 		DRS::GetSingleton()->targetScaleFactor = mRenderScale;
 		DRS::GetSingleton()->ControlResolution();
 		mMipLodBias = GetOptimalMipmapBias(0);
+		UnkOuterStruct::GetSingleton()->SetTAA(false);
 	} else {
 		DRS::GetSingleton()->targetScaleFactor = 1.0f;
 		DRS::GetSingleton()->ControlResolution();
 		mMipLodBias = 0;
+		UnkOuterStruct::GetSingleton()->SetTAA(mEnableUpscaler && mUpscaleType == 3);
 	}
 }
 
@@ -150,30 +165,36 @@ void SkyrimUpscaler::InitUpscaler()
 	back_buffer->GetDesc(&desc);
 	mDisplaySizeX = desc.Width;
 	mDisplaySizeY = desc.Height;
-	mOutColor = (ID3D11Texture2D*)InitUpscaleFeature(0, mUpscaleType, mQualityLevel, desc.Width, desc.Height, false, false, false, false, mSharpening, true, desc.Format);
-	if (mOutColor == nullptr) {
-		mEnableUpscaler = false;
-		DRS::GetSingleton()->targetScaleFactor = 1.0f;
-		mMipLodBias = 0;
-		return;
-	}
-	if (!mTempColor)
-		mD3d11Device->CreateTexture2D(&desc, NULL, &mTempColor);
-	mRenderSizeX = GetRenderWidth(0);
-	mRenderSizeY = GetRenderHeight(0);
-	mMotionScale[0] = mRenderSizeX;
-	mMotionScale[1] = mRenderSizeY;
-	SetMotionScaleX(0, mMotionScale[0]);
-	SetMotionScaleY(0, mMotionScale[1]);
-	mRenderScale = float(mRenderSizeX) / mDisplaySizeX;
-	if (mEnableUpscaler) {
-		DRS::GetSingleton()->targetScaleFactor = mRenderScale;
-		DRS::GetSingleton()->ControlResolution();
-		mMipLodBias = GetOptimalMipmapBias(0);
+	// TAA = 3
+	if (mUpscaleType != 3) {
+		mOutColor = (ID3D11Texture2D*)InitUpscaleFeature(0, mUpscaleType, mQualityLevel, desc.Width, desc.Height, false, false, false, false, mSharpening, true, desc.Format);
+		if (mOutColor == nullptr) {
+			SetEnabled(false);
+			return;
+		}
+		if (!mTempColor)
+			mD3d11Device->CreateTexture2D(&desc, NULL, &mTempColor);
+		mRenderSizeX = GetRenderWidth(0);
+		mRenderSizeY = GetRenderHeight(0);
+		mMotionScale[0] = mRenderSizeX;
+		mMotionScale[1] = mRenderSizeY;
+		SetMotionScaleX(0, mMotionScale[0]);
+		SetMotionScaleY(0, mMotionScale[1]);
+		mRenderScale = float(mRenderSizeX) / mDisplaySizeX;
+		if (mEnableUpscaler) {
+			DRS::GetSingleton()->targetScaleFactor = mRenderScale;
+			DRS::GetSingleton()->ControlResolution();
+			mMipLodBias = GetOptimalMipmapBias(0);
+		} else {
+			DRS::GetSingleton()->targetScaleFactor = 1.0f;
+			DRS::GetSingleton()->ControlResolution();
+			mMipLodBias = 0;
+		}
+		UnkOuterStruct::GetSingleton()->SetTAA(false);
 	} else {
 		DRS::GetSingleton()->targetScaleFactor = 1.0f;
 		DRS::GetSingleton()->ControlResolution();
 		mMipLodBias = 0;
+		UnkOuterStruct::GetSingleton()->SetTAA(mEnableUpscaler);
 	}
-
 }
