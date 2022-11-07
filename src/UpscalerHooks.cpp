@@ -30,6 +30,7 @@ static void MyLog(char* message, int size)
 }
 
 // Mostly from vrperfkit, thanks to fholger for showing how to do mip lod bias
+// https://github.com/fholger/vrperfkit/blob/037c09f3168ac045b5775e8d1a0c8ac982b5854f/src/d3d11/d3d11_post_processor.cpp#L76
 static void SetMipLodBias(ID3D11SamplerState** outSamplers, UINT StartSlot, UINT NumSamplers, ID3D11SamplerState* const* ppSamplers)
 {
 	if (mipLodBias != SkyrimUpscaler::GetSingleton()->mMipLodBias) {
@@ -42,13 +43,12 @@ static void SetMipLodBias(ID3D11SamplerState** outSamplers, UINT StartSlot, UINT
 	for (UINT i = 0; i < NumSamplers; ++i) {
 		auto orig = outSamplers[i];
 		if (orig == nullptr || passThroughSamplers.find(orig) != passThroughSamplers.end()) {
-			return;
+			continue;
 		}
-
 		if (mappedSamplers.find(orig) == mappedSamplers.end()) {
 			D3D11_SAMPLER_DESC sd;
 			orig->GetDesc(&sd);
-			if (sd.MipLODBias != 0 || sd.MaxAnisotropy == 1) {
+			if (sd.MipLODBias != 0 || sd.MaxAnisotropy <= 1) {
 				// do not mess with samplers that already have a bias or are not doing anisotropic filtering.
 				// should hopefully reduce the chance of causing rendering errors.
 				passThroughSamplers.insert(orig);
@@ -112,35 +112,35 @@ void WINAPI hk_ID3D11DeviceContext_VSSetSamplers(ID3D11DeviceContext* This, UINT
 {
 	ID3D11SamplerState* samplers[D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT];
 	SetMipLodBias(samplers, StartSlot, NumSamplers, ppSamplers);
-	(This->*ptrVSSetSamplers)(StartSlot, NumSamplers, ppSamplers);
+	(This->*ptrVSSetSamplers)(StartSlot, NumSamplers, samplers);
 }
 
 void WINAPI hk_ID3D11DeviceContext_GSSetSamplers(ID3D11DeviceContext* This, UINT StartSlot, UINT NumSamplers, ID3D11SamplerState* const* ppSamplers)
 {
 	ID3D11SamplerState* samplers[D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT];
 	SetMipLodBias(samplers, StartSlot, NumSamplers, ppSamplers);
-	(This->*ptrGSSetSamplers)(StartSlot, NumSamplers, ppSamplers);
+	(This->*ptrGSSetSamplers)(StartSlot, NumSamplers, samplers);
 }
 
 void WINAPI hk_ID3D11DeviceContext_HSSetSamplers(ID3D11DeviceContext* This, UINT StartSlot, UINT NumSamplers, ID3D11SamplerState* const* ppSamplers)
 {
 	ID3D11SamplerState* samplers[D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT];
 	SetMipLodBias(samplers, StartSlot, NumSamplers, ppSamplers);
-	(This->*ptrHSSetSamplers)(StartSlot, NumSamplers, ppSamplers);
+	(This->*ptrHSSetSamplers)(StartSlot, NumSamplers, samplers);
 }
 
 void WINAPI hk_ID3D11DeviceContext_DSSetSamplers(ID3D11DeviceContext* This, UINT StartSlot, UINT NumSamplers, ID3D11SamplerState* const* ppSamplers)
 {
 	ID3D11SamplerState* samplers[D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT];
 	SetMipLodBias(samplers, StartSlot, NumSamplers, ppSamplers);
-	(This->*ptrDSSetSamplers)(StartSlot, NumSamplers, ppSamplers);
+	(This->*ptrDSSetSamplers)(StartSlot, NumSamplers, samplers);
 }
 
 void WINAPI hk_ID3D11DeviceContext_CSSetSamplers(ID3D11DeviceContext* This, UINT StartSlot, UINT NumSamplers, ID3D11SamplerState* const* ppSamplers)
 {
 	ID3D11SamplerState* samplers[D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT];
 	SetMipLodBias(samplers, StartSlot, NumSamplers, ppSamplers);
-	(This->*ptrCSSetSamplers)(StartSlot, NumSamplers, ppSamplers);
+	(This->*ptrCSSetSamplers)(StartSlot, NumSamplers, samplers);
 }
 
 HRESULT WINAPI hk_D3D11CreateDeviceAndSwapChain(
@@ -237,6 +237,16 @@ struct UpscalerHooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
+	struct PlayerCharacter_Update
+	{
+		static void thunk(INT64 BSGraphics_Renderer, int unk)
+		{
+			func(BSGraphics_Renderer, unk);
+			SkyrimUpscaler::GetSingleton()->EvaluateUpscaler();
+		}
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
 	static void Install()
 	{
 		// Hook for getting the swapchain
@@ -252,7 +262,7 @@ struct UpscalerHooks
 		// Pre-UI Hook for upscaling
 		stl::write_thunk_call<Main_DrawWorld_MainDraw>(REL::RelocationID(79947, 77226).address() + REL::Relocate(0x16F, 0x2BC));  // 140ebf510
 		// Setup our own jitters
-		stl::write_thunk_call<BSGraphics_Renderer_Begin_UpdateJitter>(REL::RelocationID(75460, 77226).address() + REL::Relocate(0xE5, 0xE5));
+		stl::write_thunk_call<BSGraphics_Renderer_Begin_UpdateJitter>(REL::RelocationID(75460, 77226).address() + REL::Relocate(0xE5, 0xE2));
 		// Always enable TAA jitters, even without TAA
 		static REL::Relocation<uintptr_t> updateJitterHook{ REL::RelocationID(75709, 77518) };          // D7CFB0, DB96E0
 		static REL::Relocation<uintptr_t> buildCameraStateDataHook{ REL::RelocationID(75711, 77520) };  // D7D130, DB9850

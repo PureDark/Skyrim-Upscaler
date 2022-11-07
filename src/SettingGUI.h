@@ -25,6 +25,7 @@ public:
 	std::vector<motion_item> sorted_item_list;
 	motion_item              selected_item;
 	int                      mToggleHotkey{ ImGuiKey_End };
+	int                      SkipSampler{0};
 
 	~SettingGUI() {}
 
@@ -42,9 +43,6 @@ public:
 	void ForceEnabled(bool enabled)
 	{
 		mShowGUI = enabled;
-		auto controlMap = RE::ControlMap::GetSingleton();
-		if (controlMap)
-			controlMap->ignoreKeyboardMouse = enabled;
 	}
 
 	void InitIMGUI(IDXGISwapChain* swapchain, ID3D11Device* device, ID3D11DeviceContext* context);

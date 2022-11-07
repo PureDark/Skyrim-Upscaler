@@ -82,8 +82,9 @@ void SkyrimUpscaler::EvaluateUpscaler()
 		if (back_buffer != nullptr && mDepthBuffer != nullptr && mMotionVectors != nullptr) {
 			ID3D11Texture2D* motionVectorTex = (RE::UI::GetSingleton()->GameIsPaused() ? mMotionVectorsEmpty : mMotionVectors);
 			bool             enable = IsEnabled();
-			bool delayOneFrame = (lastEnable && !enable);
-			if ((IsEnabled() && !DRS::GetSingleton()->reset) || delayOneFrame) {
+			bool             delayOneFrame = (lastEnable && !enable);
+			bool             TAAEnabled = (mUpscaleType == 3);
+			if (((IsEnabled() && !DRS::GetSingleton()->reset) || delayOneFrame) && !TAAEnabled) {
 				lastEnable = enable;
 				ID3D11DeviceContext* context;
 				mD3d11Device->GetImmediateContext(&context);
@@ -185,7 +186,7 @@ void SkyrimUpscaler::InitUpscaler()
 		mRenderScale = float(mRenderSizeX) / mDisplaySizeX;
 		if (mEnableUpscaler) {
 			DRS::GetSingleton()->targetScaleFactor = mRenderScale;
-			DRS::GetSingleton()->ControlResolution();
+			DRS::GetSingleton()->ControlResolution();	
 			mMipLodBias = GetOptimalMipmapBias(0);
 		} else {
 			DRS::GetSingleton()->targetScaleFactor = 1.0f;
