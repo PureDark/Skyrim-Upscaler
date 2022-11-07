@@ -94,7 +94,6 @@ void SettingGUI::OnRender()
 		if (ImGui::Checkbox("Enable", &SkyrimUpscaler::GetSingleton()->mEnableUpscaler)) {
 			SkyrimUpscaler::GetSingleton()->SetEnabled(SkyrimUpscaler::GetSingleton()->mEnableUpscaler);
 		}
-		ImGui::Checkbox("Disable Evaluation", &SkyrimUpscaler::GetSingleton()->mDisableEvaluation);
 		ImGui::Checkbox("Disable Result Copying", &SkyrimUpscaler::GetSingleton()->mDisableResultCopying);
 		ImGui::Checkbox("Jitter", &SkyrimUpscaler::GetSingleton()->mEnableJitter);
 		if (ImGui::Checkbox("Sharpness", &SkyrimUpscaler::GetSingleton()->mSharpening)) {
@@ -102,26 +101,36 @@ void SettingGUI::OnRender()
 		}
 		ImGui::DragFloat("Sharpness Amount", &SkyrimUpscaler::GetSingleton()->mSharpness, 0.01f, 0.0f, 5.0f);
 
+		if (ImGui::Checkbox("Use Optimal Mip Lod Bias", &SkyrimUpscaler::GetSingleton()->mUseOptimalMipLodBias)) {
+			if (SkyrimUpscaler::GetSingleton()->mUseOptimalMipLodBias) {
+				if (SkyrimUpscaler::GetSingleton()->mUpscaleType < DLAA)
+					SkyrimUpscaler::GetSingleton()->mMipLodBias = GetOptimalMipmapBias(0);
+				else
+					SkyrimUpscaler::GetSingleton()->mMipLodBias = 0;
+			}
+		}
+		ImGui::BeginDisabled(SkyrimUpscaler::GetSingleton()->mUseOptimalMipLodBias);
 		ImGui::DragFloat("Mip Lod Bias", &SkyrimUpscaler::GetSingleton()->mMipLodBias, 0.1f, -3.0f, 3.0f);
-		ImGui::DragInt("Skip Sampler", &SkipSampler, 1, 0, 16);
+		ImGui::EndDisabled();
 
 		std::vector<const char*> imgui_combo_names{};
 		imgui_combo_names.push_back("DLSS");
 		imgui_combo_names.push_back("FSR2");
 		imgui_combo_names.push_back("XeSS");
+		imgui_combo_names.push_back("DLAA");
 		imgui_combo_names.push_back("TAA");
 
 		if (ImGui::Combo("Upscale Type", (int*)&SkyrimUpscaler::GetSingleton()->mUpscaleType, imgui_combo_names.data(), imgui_combo_names.size())) {
-			if (SkyrimUpscaler::GetSingleton()->mUpscaleType < 0 || SkyrimUpscaler::GetSingleton()->mUpscaleType > 3) {
+			if (SkyrimUpscaler::GetSingleton()->mUpscaleType < 0 || SkyrimUpscaler::GetSingleton()->mUpscaleType >= imgui_combo_names.size()) {
 				SkyrimUpscaler::GetSingleton()->mUpscaleType = 0;
 			}
 
 			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 			SkyrimUpscaler::GetSingleton()->InitUpscaler();
 		}
-		const auto qualities = (SkyrimUpscaler::GetSingleton()->mUpscaleType == 2) ? "Performance\0Balanced\0Quality\0UltraQuality\0" : "Performance\0Balanced\0Quality\0UltraPerformance\0";
+		const auto qualities = (SkyrimUpscaler::GetSingleton()->mUpscaleType == XESS) ? "Performance\0Balanced\0Quality\0UltraQuality\0" : "Performance\0Balanced\0Quality\0UltraPerformance\0";
 
-		ImGui::BeginDisabled(SkyrimUpscaler::GetSingleton()->mUpscaleType == 3);
+		ImGui::BeginDisabled(SkyrimUpscaler::GetSingleton()->mUpscaleType == TAA);
 		if (ImGui::Combo("Quality Level", (int*)&SkyrimUpscaler::GetSingleton()->mQualityLevel, qualities)) {
 			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 			SkyrimUpscaler::GetSingleton()->InitUpscaler();

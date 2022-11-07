@@ -176,7 +176,7 @@ HRESULT WINAPI hk_D3D11CreateDeviceAndSwapChain(
 	auto swapChain = *ppSwapChain;
 	SkyrimUpscaler::GetSingleton()->SetupSwapChain(swapChain);
 	SettingGUI::GetSingleton()->InitIMGUI(swapChain, device, deviceContext);
-	InitCSharpDelegate(MyLog);
+	InitLogDelegate(MyLog);
 	logger::info("Detouring virtual function tables");
 	*(uintptr_t*)&ptrPresent = Detours::X64::DetourClassVTable(*(uintptr_t*)swapChain, &hk_IDXGISwapChain_Present, 8);
 	*(uintptr_t*)&ptrCreateTexture2D = Detours::X64::DetourClassVTable(*(uintptr_t*)device, &hk_ID3D11Device_CreateTexture2D, 5);
@@ -218,17 +218,18 @@ struct UpscalerHooks
 		{
 			func(a_state);
 			if (SkyrimUpscaler::GetSingleton()->IsEnabled() && 
-				SkyrimUpscaler::GetSingleton()->mEnableJitter &&
-				SkyrimUpscaler::GetSingleton()->mUpscaleType != 3) {
-				float x = 0.0f;
-				float y = 0.0f;
-				SkyrimUpscaler::GetSingleton()->GetJitters(&x, &y);
-				float w = SkyrimUpscaler::GetSingleton()->mRenderSizeX;
-				float h = SkyrimUpscaler::GetSingleton()->mRenderSizeY;
-				a_state->jitter[0] = -2 * x / w;
-				a_state->jitter[1] = 2 * y / h;
-				SkyrimUpscaler::GetSingleton()->SetJitterOffsets(-x, -y);
-			} else if (SkyrimUpscaler::GetSingleton()->mUpscaleType != 3) {
+				SkyrimUpscaler::GetSingleton()->mEnableJitter) {
+				if (SkyrimUpscaler::GetSingleton()->mUpscaleType != TAA) {
+					float x = 0.0f;
+					float y = 0.0f;
+					SkyrimUpscaler::GetSingleton()->GetJitters(&x, &y);
+					float w = SkyrimUpscaler::GetSingleton()->mRenderSizeX;
+					float h = SkyrimUpscaler::GetSingleton()->mRenderSizeY;
+					a_state->jitter[0] = -2 * x / w;
+					a_state->jitter[1] = 2 * y / h;
+					SkyrimUpscaler::GetSingleton()->SetJitterOffsets(-x, -y);
+				}
+			} else {
 				a_state->jitter[0] = 0;
 				a_state->jitter[1] = 0;
 				SkyrimUpscaler::GetSingleton()->SetJitterOffsets(0, 0);

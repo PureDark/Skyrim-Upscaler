@@ -40,13 +40,22 @@ struct UnkOuterStruct
 	}
 };
 
+enum UpscaleType
+{
+	DLSS,
+	FSR2,
+	XESS,
+	DLAA,
+	TAA
+};
+
 class SkyrimUpscaler
 {
 public:
 	//Reserve the second value for VR
 	bool  mEnableUpscaler = false;
-	float mJitterIndex[2]{ 0, 0 };
-	float mJitterOffsets[2][2];
+	float mJitterIndex{0};
+	float mJitterOffsets[2];
 	float mMotionScale[2]{ 0, 0 };
 	bool  mSharpening{ false };
 	float mSharpness{ 0.3f };
@@ -60,8 +69,8 @@ public:
 	int   mQualityLevel{ 0 };
 	float mMipLodBias{ 0 };
 
-	bool mDisableEvaluation{ false };
 	bool mDisableResultCopying{ false };
+	bool mUseOptimalMipLodBias{ true };
 
 	ID3D11Texture2D* mTempColor{ nullptr };
 	ID3D11Texture2D* mOutColor{ nullptr };

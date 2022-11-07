@@ -25,7 +25,6 @@ public:
 	std::vector<motion_item> sorted_item_list;
 	motion_item              selected_item;
 	int                      mToggleHotkey{ ImGuiKey_End };
-	int                      SkipSampler{0};
 
 	~SettingGUI() {}
 

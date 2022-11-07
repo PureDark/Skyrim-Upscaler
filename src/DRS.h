@@ -31,8 +31,6 @@ public:
 	RE::Setting* bEnableAutoDynamicResolution;
 	void         GetGameSettings();
 
-	bool  bEnableWithENB = false;
-
 	// Variables
 
 	float targetScaleFactor = 1.0f;

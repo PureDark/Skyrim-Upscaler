@@ -3,7 +3,6 @@
 #include <ENB/AntTweakBar.h>
 #include <ENB/ENBSeriesAPI.h>
 #include <SkyrimUpscaler.h>
-extern ENB_API::ENBSDKALT1001* g_ENB;
 
 void DRS::GetGameSettings()
 {
@@ -39,31 +38,10 @@ void DRS::ResetScale()
 	currentScaleFactor = 1.0f;
 }
 
-bool GetENBParameterBool(const char* a_filename, const char* a_category, const char* a_keyname)
-{
-	BOOL                  bvalue;
-	ENB_SDK::ENBParameter param;
-	if (g_ENB->GetParameter(a_filename, a_category, a_keyname, &param)) {
-		if (param.Type == ENB_SDK::ENBParameterType::ENBParam_BOOL) {
-			memcpy(&bvalue, param.Data, ENBParameterTypeToSize(ENB_SDK::ENBParameterType::ENBParam_BOOL));
-			return bvalue;
-		}
-	}
-	logger::debug("Could not find ENB parameter {}:{}:{}", a_filename, a_category, a_keyname);
-	return false;
-}
-
 void DRS::SetDRS(BSGraphics::State* a_state)
 {
-	if ((!(g_ENB && GetENBParameterBool("enbseries.ini", "GLOBAL", "UseEffect")) || bEnableWithENB)) {
-		a_state->fDynamicResolutionCurrentHeightScale = currentScaleFactor;
-		a_state->fDynamicResolutionCurrentWidthScale = currentScaleFactor;
-	} else {
-		a_state->fDynamicResolutionPreviousHeightScale = 1.0f;
-		a_state->fDynamicResolutionPreviousWidthScale = 1.0f;
-		a_state->fDynamicResolutionCurrentHeightScale = 1.0f;
-		a_state->fDynamicResolutionCurrentWidthScale = 1.0f;
-	}
+	a_state->fDynamicResolutionCurrentHeightScale = currentScaleFactor;
+	a_state->fDynamicResolutionCurrentWidthScale = currentScaleFactor;
 }
 
 void DRS::MessageHandler(SKSE::MessagingInterface::Message* a_msg)
