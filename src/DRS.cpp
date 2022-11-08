@@ -40,8 +40,9 @@ void DRS::ResetScale()
 
 void DRS::SetDRS(BSGraphics::State* a_state)
 {
-	a_state->fDynamicResolutionCurrentHeightScale = currentScaleFactor;
-	a_state->fDynamicResolutionCurrentWidthScale = currentScaleFactor;
+	auto& runtimeData = a_state->GetRuntimeData();
+	runtimeData.fDynamicResolutionCurrentHeightScale = currentScaleFactor;
+	runtimeData.fDynamicResolutionCurrentWidthScale = currentScaleFactor;
 }
 
 void DRS::MessageHandler(SKSE::MessagingInterface::Message* a_msg)
