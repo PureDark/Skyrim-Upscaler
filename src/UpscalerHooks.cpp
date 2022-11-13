@@ -86,7 +86,6 @@ HRESULT WINAPI hk_ID3D11Device_CreateTexture2D(ID3D11Device* This, const D3D11_T
 				SettingGUI::GetSingleton()->sorted_item_list.push_back(item);
 				SettingGUI::GetSingleton()->selected_item = item;
 				SkyrimUpscaler::GetSingleton()->SetupMotionVector(SettingGUI::GetSingleton()->selected_item.resource);
-				SkyrimUpscaler::GetSingleton()->InitUpscaler();
 				logger::info("Motion Vertor Found : {} x {}", pDesc->Width, pDesc->Height);
 			}
 		}
@@ -238,16 +237,6 @@ struct UpscalerHooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	struct PlayerCharacter_Update
-	{
-		static void thunk(INT64 BSGraphics_Renderer, int unk)
-		{
-			func(BSGraphics_Renderer, unk);
-			SkyrimUpscaler::GetSingleton()->EvaluateUpscaler();
-		}
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
 	static void Install()
 	{
 		// Hook for getting the swapchain
@@ -278,3 +267,4 @@ struct UpscalerHooks
 void InstallUpscalerHooks() {
 	UpscalerHooks::Install();
 }
+

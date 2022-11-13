@@ -6,21 +6,12 @@
 #include <DRS.h>
 #include <SkyrimUpscaler.h>
 
-ENB_API::ENBSDKALT1001* g_ENB = nullptr;
-
 static void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 {
 	switch (a_msg->type) {
 	case SKSE::MessagingInterface::kDataLoaded:
 		RE::BSInputDeviceManager::GetSingleton()->AddEventSink(InputListener::GetSingleton());
 		logger::info("Input listener registered");
-		break;
-	case SKSE::MessagingInterface::kPostLoad:
-		g_ENB = reinterpret_cast<ENB_API::ENBSDKALT1001*>(ENB_API::RequestENBAPI(ENB_API::SDKVersion::V1001));
-		if (g_ENB) {
-			logger::info("Obtained ENB API");
-		} else
-			logger::info("Unable to acquire ENB API");
 		break;
 	}
 	DRS::GetSingleton()->MessageHandler(a_msg);
@@ -63,7 +54,7 @@ void InitializeLog()
 	spdlog::set_pattern("[%l] %v"s);
 }
 
-std::string MyGetDllDirectory()
+std::string GetLibraryPath(std::string filename)
 {
 	char    path[MAX_PATH];
 	HMODULE hm = NULL;
@@ -82,7 +73,7 @@ std::string MyGetDllDirectory()
 	}
 
 	std::string::size_type pos = std::string(path).find_last_of("\\/");
-	return std::string(path).substr(0, pos);
+	return (std::string(path).substr(0, pos) + "/SkyrimUpscaler/" + filename);
 }
 
 EXTERN_C [[maybe_unused]] __declspec(dllexport) bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_skse)
@@ -92,25 +83,15 @@ EXTERN_C [[maybe_unused]] __declspec(dllexport) bool SKSEAPI SKSEPlugin_Load(con
 #endif
 
 	InitializeLog();
-	logger::info("DLL Path : {}", MyGetDllDirectory());
-	auto filename = MyGetDllDirectory() + "/SkyrimUpscaler/nvngx_dlss.dll";
-	LoadLibrary(filename.c_str());
-	filename = MyGetDllDirectory() + "/SkyrimUpscaler/ffx_fsr2_api_x64.dll";
-	LoadLibrary(filename.c_str());
-	filename = MyGetDllDirectory() + "/SkyrimUpscaler/ffx_fsr2_api_dx12_x64.dll";
-	LoadLibrary(filename.c_str());
-	filename = MyGetDllDirectory() + "/SkyrimUpscaler/dxil.dll";
-	LoadLibrary(filename.c_str());
-	filename = MyGetDllDirectory() + "/SkyrimUpscaler/dxcompiler.dll";
-	LoadLibrary(filename.c_str());
-	filename = MyGetDllDirectory() + "/SkyrimUpscaler/XeFX.dll";
-	LoadLibrary(filename.c_str());
-	filename = MyGetDllDirectory() + "/SkyrimUpscaler/XeFX_Loader.dll";
-	LoadLibrary(filename.c_str());
-	filename = MyGetDllDirectory() + "/SkyrimUpscaler/libxess.dll";
-	LoadLibrary(filename.c_str());
-	filename = MyGetDllDirectory() + "/SkyrimUpscaler/PDPerfPlugin.dll";
-	LoadLibrary(filename.c_str());
+	LoadLibrary(GetLibraryPath("nvngx_dlss.dll").c_str());
+	LoadLibrary(GetLibraryPath("ffx_fsr2_api_x64.dll").c_str());
+	LoadLibrary(GetLibraryPath("ffx_fsr2_api_dx12_x64.dll").c_str());
+	LoadLibrary(GetLibraryPath("dxil.dll").c_str());
+	LoadLibrary(GetLibraryPath("dxcompiler.dll").c_str());
+	LoadLibrary(GetLibraryPath("XeFX.dll").c_str());
+	LoadLibrary(GetLibraryPath("XeFX_Loader.dll").c_str());
+	LoadLibrary(GetLibraryPath("libxess.dll").c_str());
+	LoadLibrary(GetLibraryPath("PDPerfPlugin.dll").c_str());
 	logger::info("Loaded plugin");
 
 	SKSE::Init(a_skse);

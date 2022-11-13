@@ -128,7 +128,9 @@ void SettingGUI::OnRender()
 			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 			SkyrimUpscaler::GetSingleton()->InitUpscaler();
 		}
-		const auto qualities = (SkyrimUpscaler::GetSingleton()->mUpscaleType == XESS) ? "Performance\0Balanced\0Quality\0UltraQuality\0" : "Performance\0Balanced\0Quality\0UltraPerformance\0";
+		const auto qualities = (SkyrimUpscaler::GetSingleton()->mUpscaleType == XESS) 
+			? "Performance\0Balanced\0Quality\0UltraQuality\0" 
+			: "Performance\0Balanced\0Quality\0UltraPerformance\0";
 
 		ImGui::BeginDisabled(SkyrimUpscaler::GetSingleton()->mUpscaleType == TAA);
 		if (ImGui::Combo("Quality Level", (int*)&SkyrimUpscaler::GetSingleton()->mQualityLevel, qualities)) {

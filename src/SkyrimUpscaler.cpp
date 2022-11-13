@@ -54,6 +54,7 @@ void SkyrimUpscaler::MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 	case SKSE::MessagingInterface::kNewGame:
 	case SKSE::MessagingInterface::kPreLoadGame:
 		LoadINI();
+		InitUpscaler();
 		break;
 
 	case SKSE::MessagingInterface::kSaveGame:
@@ -99,13 +100,12 @@ void SkyrimUpscaler::EvaluateUpscaler()
 				lastEnable = enable;
 				ID3D11DeviceContext* context;
 				mD3d11Device->GetImmediateContext(&context);
-				// For DLSS to work in borderless mode we must copy the backbuffer to a temporally texture
+				// For DLSS to work in borderless mode we must copy the backbuffer to a temporary texture
 				context->CopyResource(mTempColor, back_buffer);
 				int j = (mEnableJitter) ? 1 : 0;
 				if (!mDisableResultCopying) {
-					EvaluateUpscale(0, mTempColor, motionVectorTex, mDepthBuffer, nullptr, nullptr, mRenderSizeX, mRenderSizeY, mSharpness, 
+					EvaluateUpscale(0, mTempColor, motionVectorTex, mDepthBuffer, nullptr, back_buffer, mRenderSizeX, mRenderSizeY, mSharpness, 
 						mJitterOffsets[0] * j, mJitterOffsets[1] * j, mMotionScale[0], mMotionScale[1], false, g_fNear / 100, g_fFar / 100, GetVerticalFOVRad());
-					context->CopyResource(back_buffer, mOutColor);
 				}
 			}
 		}
@@ -146,7 +146,7 @@ void SkyrimUpscaler::SetEnabled(bool enabled)
 	if (mEnableUpscaler && mUpscaleType != TAA) {
 		DRS::GetSingleton()->targetScaleFactor = mRenderScale;
 		DRS::GetSingleton()->ControlResolution();
-		mMipLodBias = GetOptimalMipmapBias(0);
+		mMipLodBias = (mUpscaleType==DLAA)?0:GetOptimalMipmapBias(0);
 		UnkOuterStruct::GetSingleton()->SetTAA(false);
 	} else {
 		DRS::GetSingleton()->targetScaleFactor = 1.0f;

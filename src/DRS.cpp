@@ -1,7 +1,5 @@
 #include "DRS.h"
 
-#include <ENB/AntTweakBar.h>
-#include <ENB/ENBSeriesAPI.h>
 #include <SkyrimUpscaler.h>
 
 void DRS::GetGameSettings()
