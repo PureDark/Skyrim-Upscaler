@@ -25,23 +25,56 @@ enum PerfQualityLevel
 };
 */
 
+typedef struct
+{
+	int  id;
+	int  upscaleMethod;
+	int  qualityLevel;
+	int  displaySizeX;
+	int  displaySizeY;
+	int  format;
+	bool isContentHDR;
+	bool depthInverted;
+	bool YAxisInverted;
+	bool motionVetorsJittered;
+	bool enableSharpening;
+	bool enableAutoExposure;
+} InitParams;
+
+typedef struct
+{
+	int   id;
+	void* color;
+	void* motionVector;
+	void* depth;
+	void* mask;
+	void* destination;
+	float renderSizeX;
+	float renderSizeY;
+	float sharpness;
+	float jitterOffsetX;
+	float jitterOffsetY;
+	float motionScaleX;
+	float motionScaleY;
+	bool  reset;
+	float nearPlane;
+	float farPlane;
+	float verticalFOV;
+	bool  execute;
+} UpscaleParams;
+/* If you are calling EvaluateUpscale more than once per frame, set execute to true only at last call*/
+
 extern "C" bool __declspec(dllexport) __stdcall SetupDirectX(void* item, int graphicsAPI);
 
-extern "C" __declspec(dllexport) void* __stdcall InitUpscaleFeature(int id, int upscaleMethod, int qualityLevel, int displaySizeX, int displaySizeY, bool isContentHDR, bool depthInverted, bool YAxisInverted,
+extern "C" __declspec(dllexport) void* __stdcall SimpleInit(int id, int upscaleMethod, int qualityLevel, int displaySizeX, int displaySizeY, bool isContentHDR, bool depthInverted, bool YAxisInverted,
 	bool motionVetorsJittered, bool enableSharpening, bool enableAutoExposure, int format = 10);
 
-extern "C" void __declspec(dllexport) __stdcall SimpleEvaluate(int id, void* color, void* motionVector, void* depth, void* destination, float sharpness, float jitterOffsetX, float jitterOffsetY,
-	bool reset, float nearPlane, float farPlane, float verticalFOV);
+extern "C" __declspec(dllexport) void* __stdcall InitUpscaler(InitParams* params);
 
-extern "C" void __declspec(dllexport) __stdcall EvaluateUpscale(int id, void* color, void* motionVector, void* depth, void* mask, void* destination, int renderSizeX, int renderSizeY, float sharpness,
-	float jitterOffsetX, float jitterOffsetY, int motionScaleX, int motionScaleY, bool reset, float nearPlane, float farPlane, float verticalFOV);
+extern "C" void __declspec(dllexport) __stdcall SimpleEvaluate(int id, void* color, void* motionVector, void* depth, void* mask, void* destination, int renderSizeX, int renderSizeY, float sharpness,
+	float jitterOffsetX, float jitterOffsetY, int motionScaleX, int motionScaleY, bool reset, float nearPlane, float farPlane, float verticalFOV, bool execute = true);
 
-/* If you are calling EvaluateUpscale more than once per frame, set execute to true only at last */
-extern "C" void __declspec(dllexport) __stdcall SimpleEvaluateDX12(int id, bool execute, void* color, void* motionVector, void* depth, void* destination, float sharpness, float jitterOffsetX, float jitterOffsetY,
-	bool reset, float nearPlane, float farPlane, float verticalFOV);
-
-extern "C" void __declspec(dllexport) __stdcall EvaluateUpscaleDX12(int id, bool execute, void* color, void* motionVector, void* depth, void* mask, void* destination, int renderSizeX, int renderSizeY, float sharpness,
-	float jitterOffsetX, float jitterOffsetY, int motionScaleX, int motionScaleY, bool reset, float nearPlane, float farPlane, float verticalFOV);
+extern "C" void __declspec(dllexport) __stdcall EvaluateUpscaler(UpscaleParams* params);
 
 extern "C" void __declspec(dllexport) __stdcall SetMotionScaleX(int id, float motionScaleX);
 

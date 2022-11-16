@@ -106,6 +106,7 @@ public:
 	void SetEnabled(bool enabled);
 	void SetupDepth(ID3D11Texture2D* depth_buffer);
 	void SetupMotionVector(ID3D11Texture2D* motion_buffer);
+	void PreInit();
 	void InitUpscaler();
 };
 
