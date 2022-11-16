@@ -10,13 +10,13 @@
 #include "DRS.h"
 #include "d3d11_proxy.h"
 
-HINSTANCE hInstance = NULL;
-HWND      hWnd = NULL;
+static DXGISwapChainProxy* SwapChainProxy;
 
 static float                                                        mipLodBias = 0;
 static std::unordered_set<ID3D11SamplerState*>                      passThroughSamplers;
 static std::unordered_map<ID3D11SamplerState*, ID3D11SamplerState*> mappedSamplers;
 
+decltype(&IDXGIFactory::CreateSwapChain)      ptrCreateSwapChain;
 decltype(&D3D11CreateDeviceAndSwapChain)      ptrD3D11CreateDeviceAndSwapChain;
 decltype(&IDXGISwapChain::Present)            ptrPresent;
 decltype(&ID3D11Device::CreateTexture2D)      ptrCreateTexture2D;
@@ -68,9 +68,12 @@ static void SetMipLodBias(ID3D11SamplerState** outSamplers, UINT StartSlot, UINT
 
 HRESULT WINAPI hk_IDXGISwapChain_Present(IDXGISwapChain* This, UINT SyncInterval, UINT Flags)
 {
-	SettingGUI::GetSingleton()->OnRender();
+	static int i = 0;
+	if (i++%2 == 0)
+		return 0;
+	//SettingGUI::GetSingleton()->OnRender();
 	auto hr = (This->*ptrPresent)(SyncInterval, Flags);
-	DRS::GetSingleton()->Update();
+	//DRS::GetSingleton()->Update();
 	return hr;
 }
 
@@ -94,8 +97,8 @@ HRESULT WINAPI hk_ID3D11Device_CreateTexture2D(ID3D11Device* This, const D3D11_T
 			}
 		}
 	} else if (pDesc->Format >= DXGI_FORMAT_R24G8_TYPELESS && pDesc->Format <= DXGI_FORMAT_X24_TYPELESS_G8_UINT) {
-		if (pDesc->Width == 1280 &&
-			pDesc->Height == 720 &&
+		if (pDesc->Width == SkyrimUpscaler::GetSingleton()->mRenderSizeX &&
+			pDesc->Height == SkyrimUpscaler::GetSingleton()->mRenderSizeY &&
 			SkyrimUpscaler::GetSingleton()->mDepthBuffer == nullptr) {
 			SkyrimUpscaler::GetSingleton()->SetupDepth(*ppTexture2D);
 			logger::info("Depth Buffer Found : {} x {}", pDesc->Width, pDesc->Height);
@@ -146,68 +149,39 @@ void WINAPI hk_ID3D11DeviceContext_CSSetSamplers(ID3D11DeviceContext* This, UINT
 	(This->*ptrCSSetSamplers)(StartSlot, NumSamplers, samplers);
 }
 
-
-// this is the main message handler for the program
-LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+HRESULT WINAPI hk_IDXGIFactory_CreateSwapChain(IDXGIFactory2* This, _In_ IUnknown* pDevice, _In_ DXGI_SWAP_CHAIN_DESC* pDesc, _COM_Outptr_ IDXGISwapChain** ppSwapChain)
 {
-	// sort through and find what code to run for the message given
-	switch (message) {
-	// this message is read when the window is closed
-	case WM_DESTROY:
-		{
-			// close the application entirely
-			PostQuitMessage(0);
-			return 0;
-		}
-		break;
-	}
+	auto hr = (This->*ptrCreateSwapChain)(pDevice, pDesc, ppSwapChain);
+	SwapChainProxy = new DXGISwapChainProxy(*ppSwapChain);
 
-	// Handle any messages the switch statement didn't
-	return DefWindowProc(hWnd, message, wParam, lParam);
+	InitLogDelegate(MyLog);
+	SkyrimUpscaler::GetSingleton()->LoadINI();
+	SkyrimUpscaler::GetSingleton()->SetupSwapChain(*ppSwapChain);
+	SkyrimUpscaler::GetSingleton()->PreInit();
+	SkyrimUpscaler::GetSingleton()->InitUpscaler();
+
+	IDXGISwapChain1* mSwapChain = NULL;
+
+	DXGI_SWAP_CHAIN_DESC  swapChainDesc = *pDesc;
+	DXGI_SWAP_CHAIN_DESC1 swapChainDesc1 = {};
+	swapChainDesc1.Width = SkyrimUpscaler::GetSingleton()->mRenderSizeX;
+	swapChainDesc1.Height = SkyrimUpscaler::GetSingleton()->mRenderSizeY;
+	swapChainDesc1.Format = swapChainDesc.BufferDesc.Format;
+	swapChainDesc1.Stereo = false;
+	swapChainDesc1.SampleDesc = swapChainDesc.SampleDesc;
+	swapChainDesc1.BufferUsage = swapChainDesc.BufferUsage;
+	swapChainDesc1.BufferCount = swapChainDesc.BufferCount;
+	swapChainDesc1.Scaling = DXGI_SCALING_STRETCH;
+	swapChainDesc1.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+	swapChainDesc1.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
+	swapChainDesc1.Flags = swapChainDesc.Flags;
+
+	HRESULT hResult = This->CreateSwapChainForComposition(pDevice, &swapChainDesc1, nullptr, &mSwapChain);
+	mSwapChain->QueryInterface(IID_PPV_ARGS(&SwapChainProxy->mSwapChain2));
+
+	*ppSwapChain = SwapChainProxy->mSwapChain2;
+	return hr;
 }
-
-HWND CreateProxyWindow()
-{
-	// the handle for the window, filled by a function
-	HWND hWnd;
-	// this struct holds information for the window class
-	WNDCLASSEX wc;
-
-	// clear out the window class for use
-	ZeroMemory(&wc, sizeof(WNDCLASSEX));
-
-	// fill in the struct with the needed information
-	wc.cbSize = sizeof(WNDCLASSEX);
-	wc.style = CS_HREDRAW | CS_VREDRAW;
-	wc.lpfnWndProc = WindowProc;
-	wc.hInstance = hInstance;
-	wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-	wc.hbrBackground = (HBRUSH)COLOR_WINDOW;
-	wc.lpszClassName = "WindowClass1";
-
-	// register the window class
-	RegisterClassEx(&wc);
-
-	// create the window and use the result as the handle
-	hWnd = CreateWindowEx(NULL,
-		"WindowClass1",                // name of the window class
-		"Our First Windowed Program",  // title of the window
-		WS_OVERLAPPEDWINDOW,           // window style
-		300,                           // x-position of the window
-		300,                           // y-position of the window
-		500,                           // width of the window
-		400,                           // height of the window
-		NULL,                          // we have no parent window, NULL
-		NULL,                          // we aren't using menus, NULL
-		hInstance,                     // application handle
-		NULL);                         // used with multiple windows, NULL
-
-	// display the window on the screen
-	ShowWindow(hWnd, SW_SHOW);
-	return hWnd;
-}
-
-static DXGISwapChainProxy* SwapChainProxy;
 
 HRESULT WINAPI hk_D3D11CreateDeviceAndSwapChain(
 	IDXGIAdapter*               pAdapter,
@@ -223,6 +197,10 @@ HRESULT WINAPI hk_D3D11CreateDeviceAndSwapChain(
 	D3D_FEATURE_LEVEL*          pFeatureLevel,
 	ID3D11DeviceContext**       ppImmediateContext)
 {
+	IDXGIFactory2* mFactory = NULL;
+	pAdapter->GetParent(IID_PPV_ARGS(&mFactory));
+	*(uintptr_t*)&ptrCreateSwapChain = Detours::X64::DetourClassVTable(*(uintptr_t*)mFactory, &hk_IDXGIFactory_CreateSwapChain, 10);
+
 	logger::info("Calling original D3D11CreateDeviceAndSwapChain");
 	HRESULT hr = (*ptrD3D11CreateDeviceAndSwapChain)(pAdapter,
 		DriverType,
@@ -240,69 +218,10 @@ HRESULT WINAPI hk_D3D11CreateDeviceAndSwapChain(
 	auto device = *ppDevice;
 	auto deviceContext = *ppImmediateContext;
 	auto swapChain = *ppSwapChain;
-	SkyrimUpscaler::GetSingleton()->SetupSwapChain(swapChain);
-	SkyrimUpscaler::GetSingleton()->PreInit();
-	SettingGUI::GetSingleton()->InitIMGUI(swapChain, device, deviceContext);
-	InitLogDelegate(MyLog);
-
-	SwapChainProxy = new DXGISwapChainProxy(*ppSwapChain);
-	IDXGISwapChain* proxySwapChain = SwapChainProxy;
-	*ppSwapChain = proxySwapChain;
-
-	ID3D11DeviceContext* mDeviceContext = NULL;
-	IDXGIDevice*         mDXGIDevice = NULL;
-	IDXGIAdapter*        mAdapter = NULL;
-	IDXGIFactory2*       mFactory = NULL;
-	IDXGISwapChain1*      mSwapChain = NULL;
-
-	HRESULT hResult = device->QueryInterface(IID_PPV_ARGS(&mDXGIDevice));
-	if (FAILED(hResult)) {
-		logger::info("QueryInterface IDXGIDevice Falied");
-		return hResult;
-	}
-
-	hResult = mDXGIDevice->GetAdapter(&mAdapter);
-	if (FAILED(hResult)) {
-		logger::info("GetAdapter Falied");
-		return hResult;
-	}
-
-	hResult = mAdapter->GetParent(IID_PPV_ARGS(&mFactory));
-	if (FAILED(hResult)) {
-		logger::info("GetParent Falied");
-		return hResult;
-	}
-
-	DXGI_SWAP_CHAIN_DESC swapChainDesc;
-	ZeroMemory(&swapChainDesc, sizeof(DXGI_SWAP_CHAIN_DESC));
-
-	(*ppSwapChain)->GetDesc(&swapChainDesc);
-
-	//swapChainDesc.OutputWindow = CreateProxyWindow();
-
-	
-	DXGI_SWAP_CHAIN_DESC1 swapChainDesc1 = {};
-	swapChainDesc1.Width = 1280;
-	swapChainDesc1.Height = 720;
-	swapChainDesc1.Format = swapChainDesc.BufferDesc.Format;
-	swapChainDesc1.Stereo = false;
-	swapChainDesc1.SampleDesc = swapChainDesc.SampleDesc;
-	swapChainDesc1.BufferUsage = swapChainDesc.BufferUsage;
-	swapChainDesc1.BufferCount = swapChainDesc.BufferCount;
-	swapChainDesc1.Scaling = DXGI_SCALING_STRETCH;
-	swapChainDesc1.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
-	swapChainDesc1.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
-	swapChainDesc1.Flags  = swapChainDesc.Flags;
-
-	hResult = mFactory->CreateSwapChainForComposition(device, &swapChainDesc1, nullptr, &mSwapChain);
-	mSwapChain->QueryInterface(IID_PPV_ARGS(&SwapChainProxy->mSwapChain2));
-	SwapChainProxy->usingSwapChain2 = true;
-	SwapChainProxy->usingSwapChain2 = false;
-	//hResult = mFactory->CreateSwapChain(device, &swapChainDesc, &mSwapChain);
-
+	SettingGUI::GetSingleton()->InitIMGUI(SwapChainProxy->mSwapChain1, device, deviceContext);
 
 	logger::info("Detouring virtual function tables");
-	//*(uintptr_t*)&ptrPresent = Detours::X64::DetourClassVTable(*(uintptr_t*)swapChain, &hk_IDXGISwapChain_Present, 8);
+	*(uintptr_t*)&ptrPresent = Detours::X64::DetourClassVTable(*(uintptr_t*)SwapChainProxy->mSwapChain2, &hk_IDXGISwapChain_Present, 8);
 	*(uintptr_t*)&ptrCreateTexture2D = Detours::X64::DetourClassVTable(*(uintptr_t*)device, &hk_ID3D11Device_CreateTexture2D, 5);
 	*(uintptr_t*)&ptrPSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_PSSetSamplers, 10);
 	*(uintptr_t*)&ptrVSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_VSSetSamplers, 26);
@@ -311,20 +230,25 @@ HRESULT WINAPI hk_D3D11CreateDeviceAndSwapChain(
 	*(uintptr_t*)&ptrDSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_DSSetSamplers, 65);
 	*(uintptr_t*)&ptrCSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_CSSetSamplers, 70);
 
+	SwapChainProxy->mSwapChain2 = swapChain;
+	SwapChainProxy->usingSwapChain2 = true;
+	*ppSwapChain = SwapChainProxy;
+
 	return hr;
 }
 
 struct UpscalerHooks
 {
 
-	/*struct BSGraphics_Renderer_Init_InitD3D
-	{
-		static void thunk()
-		{
-			func();
-		}
-		static inline REL::Relocation<decltype(thunk)> func;
-	};*/
+	//struct BSGraphics_Renderer_Init_InitD3D
+	//{
+	//	static void thunk()
+	//	{
+	//		func();
+	//		SwapChainProxy->usingSwapChain2 = false;
+	//	}
+	//	static inline REL::Relocation<decltype(thunk)> func;
+	//};
 
 	struct Main_DrawWorld_MainDraw
 	{
@@ -375,8 +299,8 @@ struct UpscalerHooks
 		static BOOL thunk(_In_ HWND hWnd, _Out_ LPRECT lpRect)
 		{
 			BOOL result = ::GetClientRect(hWnd, lpRect);
-			lpRect->right = 1280;
-			lpRect->bottom = 720;
+			lpRect->right = SkyrimUpscaler::GetSingleton()->mRenderSizeX;
+			lpRect->bottom = SkyrimUpscaler::GetSingleton()->mRenderSizeY;
 			//logger::info("lpRect size : {}x{}", lpRect->right, lpRect->bottom);
 			return result;
 		}

@@ -125,12 +125,11 @@ void SkyrimUpscaler::ForceEvaluateUpscaler(ID3D11Texture2D* color, ID3D11Texture
 		ID3D11DeviceContext* context;
 		mD3d11Device->GetImmediateContext(&context);
 		// For DLSS to work in borderless mode we must copy the backbuffer to a temporary texture
-		context->CopyResource(mTempColor, color);
+		//context->CopyResource(mTempColor, color);
 		if (!mDisableResultCopying) {
-			SimpleEvaluate(0, mTempColor, motionVectorTex, mDepthBuffer, nullptr, dest, 1280, 720, mSharpness,
-				mJitterOffsets[0], mJitterOffsets[1], 1280, 720, false, g_fNear / 100, g_fFar / 100, GetVerticalFOVRad());
+			SimpleEvaluate(0, color, motionVectorTex, mDepthBuffer, nullptr, dest, mRenderSizeX, mRenderSizeY, mSharpness,
+				mJitterOffsets[0], mJitterOffsets[1], mMotionScale[0], mMotionScale[1], false, g_fNear / 100, g_fFar / 100, GetVerticalFOVRad());
 			context->CopyResource(mMotionVectors, mMotionVectorsEmpty);
-			mMipLodBias = -2;
 		}
 	}
 }
@@ -212,8 +211,6 @@ void SkyrimUpscaler::InitUpscaler()
 	back_buffer->GetDesc(&desc);
 	mDisplaySizeX = desc.Width;
 	mDisplaySizeY = desc.Height;
-	desc.Width = 1280;
-	desc.Height = 720;
 	if (mUpscaleType != TAA) {
 		int upscaleType = (mUpscaleType == DLAA) ? DLSS : mUpscaleType;
 		mOutColor = (ID3D11Texture2D*)SimpleInit(0, upscaleType, mQualityLevel, mDisplaySizeX, mDisplaySizeY, false, false, false, false, mSharpening, true, desc.Format);
@@ -224,8 +221,8 @@ void SkyrimUpscaler::InitUpscaler()
 		if (!mTempColor)
 			mD3d11Device->CreateTexture2D(&desc, NULL, &mTempColor);
 		if (mUpscaleType == DLAA) {
-			mRenderSizeX = desc.Width;
-			mRenderSizeY = desc.Height;
+			mRenderSizeX = mDisplaySizeX;
+			mRenderSizeY = mDisplaySizeY;
 			mRenderScale = 1.0f;
 		} else {
 			mRenderSizeX = GetRenderWidth(0);

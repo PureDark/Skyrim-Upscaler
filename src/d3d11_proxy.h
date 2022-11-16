@@ -11,11 +11,14 @@ public:
 	IDXGISwapChain*  mSwapChain2;
 	ID3D11Device*    mD3d11Device;
 
+	DXGISwapChainProxy();
 	DXGISwapChainProxy(IDXGISwapChain* swapChain);
 	//DXGISwapChainProxy(IDXGISwapChain1* swapChain);
 	//DXGISwapChainProxy(IDXGISwapChain2* swapChain);
 	//DXGISwapChainProxy(IDXGISwapChain3* swapChain);
 	//DXGISwapChainProxy(IDXGISwapChain4* swapChain);
+
+	void SetupSwapChain(IDXGISwapChain* swapChain);
 
 	IDXGISwapChain* GetCurrentSwapChain();
 

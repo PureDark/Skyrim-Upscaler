@@ -31,6 +31,16 @@ DXGISwapChainProxy::DXGISwapChainProxy(IDXGISwapChain* swapChain)
 	swapChain->GetDevice(IID_PPV_ARGS(&mD3d11Device));
 }
 
+DXGISwapChainProxy::DXGISwapChainProxy()
+{
+}
+
+void DXGISwapChainProxy::SetupSwapChain(IDXGISwapChain* swapChain)
+{
+	mSwapChain1 = swapChain;
+	swapChain->GetDevice(IID_PPV_ARGS(&mD3d11Device));
+}
+
 IDXGISwapChain* DXGISwapChainProxy::GetCurrentSwapChain(){
 	return (usingSwapChain2) ? mSwapChain2 : mSwapChain1;
 }
@@ -95,14 +105,14 @@ HRESULT STDMETHODCALLTYPE DXGISwapChainProxy::Present(UINT SyncInterval, UINT Fl
 	mSwapChain2->GetBuffer(0, IID_PPV_ARGS(&back_buffer2));
 	//D3D11_TEXTURE2D_DESC desc2;
 	//back_buffer2->GetDesc(&desc2);
-	//SkyrimUpscaler::GetSingleton()->ForceEvaluateUpscaler(back_buffer2, back_buffer1);
 	//logger::info("Buffer 1 : {} x {}", desc1.Width, desc1.Height);
 	//logger::info("Buffer 2 : {} x {}", desc2.Width, desc2.Height);
+	hr = mSwapChain2->Present(SyncInterval, Flags);
 	//ID3D11DeviceContext* context;
 	//mD3d11Device->GetImmediateContext(&context);
 	//context->CopyResource(back_buffer1, back_buffer2);
+	SkyrimUpscaler::GetSingleton()->ForceEvaluateUpscaler(back_buffer2, back_buffer1);
 	hr = mSwapChain1->Present(SyncInterval, Flags);
-	//hr = mSwapChain2->Present(SyncInterval, Flags);
 
 	//usingSwapChain2 = true;
 	return hr;
