@@ -112,6 +112,27 @@ void SkyrimUpscaler::EvaluateUpscaler()
 	}
 }
 
+void SkyrimUpscaler::ForceEvaluateUpscaler(ID3D11Texture2D* color, ID3D11Texture2D* dest)
+{
+	static float&      g_fNear = (*(float*)(RELOCATION_ID(517032, 403540).address() + 0x40));  // 2F26FC0, 2FC1A90
+	static float&      g_fFar = (*(float*)(RELOCATION_ID(517032, 403540).address() + 0x44));   // 2F26FC4, 2FC1A94
+	static bool        lastEnable = false;
+
+	if (mDepthBuffer != nullptr && mMotionVectors != nullptr) {
+		ID3D11Texture2D* motionVectorTex = (RE::UI::GetSingleton()->GameIsPaused() ? mMotionVectorsEmpty : mMotionVectors);
+		ID3D11DeviceContext* context;
+		mD3d11Device->GetImmediateContext(&context);
+		// For DLSS to work in borderless mode we must copy the backbuffer to a temporary texture
+		context->CopyResource(mTempColor, color);
+		if (!mDisableResultCopying) {
+			SimpleEvaluate(0, mTempColor, motionVectorTex, mDepthBuffer, nullptr, dest, 1280, 720, mSharpness,
+				mJitterOffsets[0], mJitterOffsets[1], 1280, 720, false, g_fNear / 100, g_fFar / 100, GetVerticalFOVRad());
+			context->CopyResource(mMotionVectors, mMotionVectorsEmpty);
+			mMipLodBias = -2;
+		}
+	}
+}
+
 bool SkyrimUpscaler::IsEnabled()
 {
 	return mEnableUpscaler && !RE::UIBlurManager::GetSingleton()->blurCount > 0;
@@ -179,6 +200,8 @@ void SkyrimUpscaler::InitUpscaler()
 	back_buffer->GetDesc(&desc);
 	mDisplaySizeX = desc.Width;
 	mDisplaySizeY = desc.Height;
+	desc.Width = 1280;
+	desc.Height = 720;
 	if (mUpscaleType != TAA) {
 		int upscaleType = (mUpscaleType == DLAA) ? DLSS : mUpscaleType;
 		mOutColor = (ID3D11Texture2D*)InitUpscaleFeature(0, upscaleType, mQualityLevel, desc.Width, desc.Height, false, false, false, false, mSharpening, true, desc.Format);

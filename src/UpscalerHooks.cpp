@@ -8,6 +8,10 @@
 
 #include <Detours.h>
 #include "DRS.h"
+#include "d3d11_proxy.h"
+
+HINSTANCE hInstance = NULL;
+HWND      hWnd = NULL;
 
 
 static float                                                        mipLodBias = 0;
@@ -90,8 +94,8 @@ HRESULT WINAPI hk_ID3D11Device_CreateTexture2D(ID3D11Device* This, const D3D11_T
 			}
 		}
 	} else if (pDesc->Format >= DXGI_FORMAT_R24G8_TYPELESS && pDesc->Format <= DXGI_FORMAT_X24_TYPELESS_G8_UINT) {
-		if (pDesc->Width == SkyrimUpscaler::GetSingleton()->mDisplaySizeX &&
-			pDesc->Height == SkyrimUpscaler::GetSingleton()->mDisplaySizeY &&
+		if (pDesc->Width == 1280 &&
+			pDesc->Height == 720 &&
 			SkyrimUpscaler::GetSingleton()->mDepthBuffer == nullptr) {
 			SkyrimUpscaler::GetSingleton()->SetupDepth(*ppTexture2D);
 			logger::info("Depth Buffer Found : {} x {}", pDesc->Width, pDesc->Height);
@@ -142,6 +146,69 @@ void WINAPI hk_ID3D11DeviceContext_CSSetSamplers(ID3D11DeviceContext* This, UINT
 	(This->*ptrCSSetSamplers)(StartSlot, NumSamplers, samplers);
 }
 
+
+// this is the main message handler for the program
+LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	// sort through and find what code to run for the message given
+	switch (message) {
+	// this message is read when the window is closed
+	case WM_DESTROY:
+		{
+			// close the application entirely
+			PostQuitMessage(0);
+			return 0;
+		}
+		break;
+	}
+
+	// Handle any messages the switch statement didn't
+	return DefWindowProc(hWnd, message, wParam, lParam);
+}
+
+HWND CreateProxyWindow()
+{
+	// the handle for the window, filled by a function
+	HWND hWnd;
+	// this struct holds information for the window class
+	WNDCLASSEX wc;
+
+	// clear out the window class for use
+	ZeroMemory(&wc, sizeof(WNDCLASSEX));
+
+	// fill in the struct with the needed information
+	wc.cbSize = sizeof(WNDCLASSEX);
+	wc.style = CS_HREDRAW | CS_VREDRAW;
+	wc.lpfnWndProc = WindowProc;
+	wc.hInstance = hInstance;
+	wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+	wc.hbrBackground = (HBRUSH)COLOR_WINDOW;
+	wc.lpszClassName = "WindowClass1";
+
+	// register the window class
+	RegisterClassEx(&wc);
+
+	// create the window and use the result as the handle
+	hWnd = CreateWindowEx(NULL,
+		"WindowClass1",                // name of the window class
+		"Our First Windowed Program",  // title of the window
+		WS_OVERLAPPEDWINDOW,           // window style
+		300,                           // x-position of the window
+		300,                           // y-position of the window
+		500,                           // width of the window
+		400,                           // height of the window
+		NULL,                          // we have no parent window, NULL
+		NULL,                          // we aren't using menus, NULL
+		hInstance,                     // application handle
+		NULL);                         // used with multiple windows, NULL
+
+	// display the window on the screen
+	ShowWindow(hWnd, SW_SHOW);
+	return hWnd;
+}
+
+static DXGISwapChainProxy* SwapChainProxy;
+
 HRESULT WINAPI hk_D3D11CreateDeviceAndSwapChain(
 	IDXGIAdapter*               pAdapter,
 	D3D_DRIVER_TYPE             DriverType,
@@ -176,8 +243,65 @@ HRESULT WINAPI hk_D3D11CreateDeviceAndSwapChain(
 	SkyrimUpscaler::GetSingleton()->SetupSwapChain(swapChain);
 	SettingGUI::GetSingleton()->InitIMGUI(swapChain, device, deviceContext);
 	InitLogDelegate(MyLog);
+
+	SwapChainProxy = new DXGISwapChainProxy(*ppSwapChain);
+	IDXGISwapChain* proxySwapChain = SwapChainProxy;
+	*ppSwapChain = proxySwapChain;
+
+	ID3D11DeviceContext* mDeviceContext = NULL;
+	IDXGIDevice*         mDXGIDevice = NULL;
+	IDXGIAdapter*        mAdapter = NULL;
+	IDXGIFactory2*       mFactory = NULL;
+	IDXGISwapChain1*      mSwapChain = NULL;
+
+	HRESULT hResult = device->QueryInterface(IID_PPV_ARGS(&mDXGIDevice));
+	if (FAILED(hResult)) {
+		logger::info("QueryInterface IDXGIDevice Falied");
+		return hResult;
+	}
+
+	hResult = mDXGIDevice->GetAdapter(&mAdapter);
+	if (FAILED(hResult)) {
+		logger::info("GetAdapter Falied");
+		return hResult;
+	}
+
+	hResult = mAdapter->GetParent(IID_PPV_ARGS(&mFactory));
+	if (FAILED(hResult)) {
+		logger::info("GetParent Falied");
+		return hResult;
+	}
+
+	DXGI_SWAP_CHAIN_DESC swapChainDesc;
+	ZeroMemory(&swapChainDesc, sizeof(DXGI_SWAP_CHAIN_DESC));
+
+	(*ppSwapChain)->GetDesc(&swapChainDesc);
+
+	//swapChainDesc.OutputWindow = CreateProxyWindow();
+
+	
+	DXGI_SWAP_CHAIN_DESC1 swapChainDesc1 = {};
+	swapChainDesc1.Width = 1280;
+	swapChainDesc1.Height = 720;
+	swapChainDesc1.Format = swapChainDesc.BufferDesc.Format;
+	swapChainDesc1.Stereo = false;
+	swapChainDesc1.SampleDesc = swapChainDesc.SampleDesc;
+	swapChainDesc1.BufferUsage = swapChainDesc.BufferUsage;
+	swapChainDesc1.BufferCount = swapChainDesc.BufferCount;
+	swapChainDesc1.Scaling = DXGI_SCALING_STRETCH;
+	swapChainDesc1.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+	swapChainDesc1.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
+	swapChainDesc1.Flags  = swapChainDesc.Flags;
+
+	hResult = mFactory->CreateSwapChainForComposition(device, &swapChainDesc1, nullptr, &mSwapChain);
+	mSwapChain->QueryInterface(IID_PPV_ARGS(&SwapChainProxy->mSwapChain2));
+	SwapChainProxy->usingSwapChain2 = true;
+	SwapChainProxy->usingSwapChain2 = false;
+	//hResult = mFactory->CreateSwapChain(device, &swapChainDesc, &mSwapChain);
+
+
 	logger::info("Detouring virtual function tables");
-	*(uintptr_t*)&ptrPresent = Detours::X64::DetourClassVTable(*(uintptr_t*)swapChain, &hk_IDXGISwapChain_Present, 8);
+	//*(uintptr_t*)&ptrPresent = Detours::X64::DetourClassVTable(*(uintptr_t*)swapChain, &hk_IDXGISwapChain_Present, 8);
 	*(uintptr_t*)&ptrCreateTexture2D = Detours::X64::DetourClassVTable(*(uintptr_t*)device, &hk_ID3D11Device_CreateTexture2D, 5);
 	*(uintptr_t*)&ptrPSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_PSSetSamplers, 10);
 	*(uintptr_t*)&ptrVSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_VSSetSamplers, 26);
@@ -206,7 +330,15 @@ struct UpscalerHooks
 		static void thunk(INT64 BSGraphics_Renderer, int unk)
 		{
 			func(BSGraphics_Renderer, unk);
-			SkyrimUpscaler::GetSingleton()->EvaluateUpscaler();
+			//SkyrimUpscaler::GetSingleton()->EvaluateUpscaler();
+			//if (SwapChainProxy == nullptr)
+			//	return;
+			//ID3D11Texture2D* back_buffer1;
+			//SwapChainProxy->mSwapChain1->GetBuffer(0, IID_PPV_ARGS(&back_buffer1));
+			//ID3D11Texture2D* back_buffer2;
+			//SwapChainProxy->mSwapChain2->GetBuffer(0, IID_PPV_ARGS(&back_buffer2));
+			//SkyrimUpscaler::GetSingleton()->ForceEvaluateUpscaler(back_buffer2, back_buffer1);
+			//SwapChainProxy->usingSwapChain2 = false;
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
@@ -237,6 +369,19 @@ struct UpscalerHooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
+	struct GetClientRectHook
+	{
+		static BOOL thunk(_In_ HWND hWnd, _Out_ LPRECT lpRect)
+		{
+			BOOL result = ::GetClientRect(hWnd, lpRect);
+			lpRect->right = 1280;
+			lpRect->bottom = 720;
+			//logger::info("lpRect size : {}x{}", lpRect->right, lpRect->bottom);
+			return result;
+		}
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
 	static void Install()
 	{
 		// Hook for getting the swapchain
@@ -253,6 +398,8 @@ struct UpscalerHooks
 		stl::write_thunk_call<Main_DrawWorld_MainDraw>(REL::RelocationID(79947, 82084).address() + REL::Relocate(0x16F, 0x17A));  // EBF510 (EBF67F), F05BF0 (F05D6A)
 		// Setup our own jitters
 		stl::write_thunk_call<BSGraphics_Renderer_Begin_UpdateJitter>(REL::RelocationID(75460, 77245).address() + REL::Relocate(0xE5, 0xE2));  // D6A0C0 (D6A1A5), DA5A00 (DA5AE2)
+		// GetClientRectHook
+		stl::write_thunk_call6<GetClientRectHook>(REL::RelocationID(75460, 77245).address() + REL::Relocate(0x192, 0x18B));  // D6A0C0 (D6A252), DA5A00 (DA5B8B)
 		// Always enable TAA jitters, even without TAA
 		static REL::Relocation<uintptr_t> updateJitterHook{ REL::RelocationID(75709, 77518) };          // D7CFB0, DB96E0
 		static REL::Relocation<uintptr_t> buildCameraStateDataHook{ REL::RelocationID(75711, 77520) };  // D7D130, DB9850

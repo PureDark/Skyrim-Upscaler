@@ -96,6 +96,7 @@ public:
 
 	float GetVerticalFOVRad();
 	void  EvaluateUpscaler();
+	void  ForceEvaluateUpscaler(ID3D11Texture2D* color, ID3D11Texture2D* dest);
 
 	bool IsEnabled();
 

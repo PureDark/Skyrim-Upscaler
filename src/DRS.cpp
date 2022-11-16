@@ -38,6 +38,7 @@ void DRS::ResetScale()
 
 void DRS::SetDRS(BSGraphics::State* a_state)
 {
+	ResetScale();
 	auto& runtimeData = a_state->GetRuntimeData();
 	runtimeData.fDynamicResolutionCurrentHeightScale = currentScaleFactor;
 	runtimeData.fDynamicResolutionCurrentWidthScale = currentScaleFactor;
