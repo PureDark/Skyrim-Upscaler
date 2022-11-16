@@ -13,7 +13,6 @@
 HINSTANCE hInstance = NULL;
 HWND      hWnd = NULL;
 
-
 static float                                                        mipLodBias = 0;
 static std::unordered_set<ID3D11SamplerState*>                      passThroughSamplers;
 static std::unordered_map<ID3D11SamplerState*, ID3D11SamplerState*> mappedSamplers;
@@ -90,6 +89,7 @@ HRESULT WINAPI hk_ID3D11Device_CreateTexture2D(ID3D11Device* This, const D3D11_T
 				SettingGUI::GetSingleton()->sorted_item_list.push_back(item);
 				SettingGUI::GetSingleton()->selected_item = item;
 				SkyrimUpscaler::GetSingleton()->SetupMotionVector(SettingGUI::GetSingleton()->selected_item.resource);
+				SkyrimUpscaler::GetSingleton()->InitUpscaler();
 				logger::info("Motion Vertor Found : {} x {}", pDesc->Width, pDesc->Height);
 			}
 		}
@@ -241,6 +241,7 @@ HRESULT WINAPI hk_D3D11CreateDeviceAndSwapChain(
 	auto deviceContext = *ppImmediateContext;
 	auto swapChain = *ppSwapChain;
 	SkyrimUpscaler::GetSingleton()->SetupSwapChain(swapChain);
+	SkyrimUpscaler::GetSingleton()->PreInit();
 	SettingGUI::GetSingleton()->InitIMGUI(swapChain, device, deviceContext);
 	InitLogDelegate(MyLog);
 

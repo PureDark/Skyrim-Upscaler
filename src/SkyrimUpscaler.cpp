@@ -49,12 +49,16 @@ void SkyrimUpscaler::SaveINI()
 
 void SkyrimUpscaler::MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 {
+	static bool inited = false;
 	switch (a_msg->type) {
 	case SKSE::MessagingInterface::kDataLoaded:
 	case SKSE::MessagingInterface::kNewGame:
 	case SKSE::MessagingInterface::kPreLoadGame:
-		LoadINI();
-		InitUpscaler();
+		if (!inited) {
+			LoadINI();
+			//InitUpscaler();
+			inited = true;
+		}
 		break;
 
 	case SKSE::MessagingInterface::kSaveGame:
@@ -82,8 +86,6 @@ float SkyrimUpscaler::GetVerticalFOVRad()
 
 void SkyrimUpscaler::EvaluateUpscaler()
 {
-	static const float Deg2Rad = 0.01745329252f;
-	static const float Rad2Deg = 57.29578f;
 	static float&      g_fNear = (*(float*)(RELOCATION_ID(517032, 403540).address() + 0x40));  // 2F26FC0, 2FC1A90
 	static float&      g_fFar = (*(float*)(RELOCATION_ID(517032, 403540).address() + 0x44));   // 2F26FC4, 2FC1A94
 	static bool        lastEnable = false;
@@ -104,7 +106,7 @@ void SkyrimUpscaler::EvaluateUpscaler()
 				context->CopyResource(mTempColor, back_buffer);
 				int j = (mEnableJitter) ? 1 : 0;
 				if (!mDisableResultCopying) {
-					EvaluateUpscale(0, mTempColor, motionVectorTex, mDepthBuffer, nullptr, back_buffer, mRenderSizeX, mRenderSizeY, mSharpness, 
+					SimpleEvaluate(0, mTempColor, motionVectorTex, mDepthBuffer, nullptr, back_buffer, mRenderSizeX, mRenderSizeY, mSharpness, 
 						mJitterOffsets[0] * j, mJitterOffsets[1] * j, mMotionScale[0], mMotionScale[1], false, g_fNear / 100, g_fFar / 100, GetVerticalFOVRad());
 				}
 			}
@@ -192,6 +194,16 @@ void SkyrimUpscaler::SetupMotionVector(ID3D11Texture2D* motion_buffer)
 	}
 }
 
+void SkyrimUpscaler::PreInit()
+{
+	ID3D11Texture2D* back_buffer;
+	mSwapChain->GetBuffer(0, IID_PPV_ARGS(&back_buffer));
+	D3D11_TEXTURE2D_DESC desc;
+	back_buffer->GetDesc(&desc);
+	mDisplaySizeX = desc.Width;
+	mDisplaySizeY = desc.Height;
+}
+
 void SkyrimUpscaler::InitUpscaler()
 {
 	ID3D11Texture2D* back_buffer;
@@ -204,7 +216,7 @@ void SkyrimUpscaler::InitUpscaler()
 	desc.Height = 720;
 	if (mUpscaleType != TAA) {
 		int upscaleType = (mUpscaleType == DLAA) ? DLSS : mUpscaleType;
-		mOutColor = (ID3D11Texture2D*)InitUpscaleFeature(0, upscaleType, mQualityLevel, desc.Width, desc.Height, false, false, false, false, mSharpening, true, desc.Format);
+		mOutColor = (ID3D11Texture2D*)SimpleInit(0, upscaleType, mQualityLevel, mDisplaySizeX, mDisplaySizeY, false, false, false, false, mSharpening, true, desc.Format);
 		if (mOutColor == nullptr) {
 			SetEnabled(false);
 			return;
