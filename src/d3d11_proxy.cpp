@@ -93,15 +93,6 @@ HRESULT STDMETHODCALLTYPE DXGISwapChainProxy::Present(UINT SyncInterval, UINT Fl
 		mDevice->CreateShaderResourceView(back_buffer2, NULL, &shaderResourceView);
 	RenderTexture(shaderResourceView, backBufferView, SkyrimUpscaler::GetSingleton()->mDisplaySizeX, SkyrimUpscaler::GetSingleton()->mDisplaySizeY);
 
-	if (ImGui::IsKeyReleased(ImGuiKey_Keypad2)) {
-		DirectX::SaveWICTextureToFile(mContext, SkyrimUpscaler::GetSingleton()->mTempColor, GUID_ContainerFormatPng, L"tempColor.png");
-	}
-
-	if (ImGui::IsKeyReleased(ImGuiKey_Keypad3)) {
-		mContext->CopyResource(SkyrimUpscaler::GetSingleton()->mTempColor2, back_buffer2);
-		DirectX::SaveWICTextureToFile(mContext, SkyrimUpscaler::GetSingleton()->mTempColor, GUID_ContainerFormatPng, L"tempColor2.png");
-	}
-
 	hr = mSwapChain1->Present(SyncInterval, Flags);
 	return hr;
 }

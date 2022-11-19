@@ -238,9 +238,6 @@ HRESULT WINAPI hk_D3D11CreateDeviceAndSwapChain(
 	return hr;
 }
 
-static ID3D11RenderTargetView* gRenderTargetView = nullptr;
-static ID3D11DepthStencilView* gDepthStencilView = nullptr;
-
 struct UpscalerHooks
 {
 
@@ -264,16 +261,13 @@ struct UpscalerHooks
 			ID3D11Texture2D* back_buffer2;
 			SwapChainProxy->mSwapChain2->GetBuffer(0, IID_PPV_ARGS(&back_buffer2));
 			SkyrimUpscaler::GetSingleton()->ForceEvaluateUpscaler(back_buffer2, back_buffer1);
-
-			if (gRenderTargetView == nullptr) {
-				SwapChainProxy->mDevice->CreateRenderTargetView(back_buffer2, NULL, &gRenderTargetView);
+			static ID3D11RenderTargetView* backbuffRTV;
+			if (backbuffRTV == nullptr) {
+				SwapChainProxy->mDevice->CreateRenderTargetView(back_buffer2, NULL, &backbuffRTV);
 			}
+
 			const FLOAT color[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-			SwapChainProxy->mContext->ClearRenderTargetView(gRenderTargetView, color);
-
-			if (ImGui::IsKeyReleased(ImGuiKey_Keypad1)) {
-				DirectX::SaveWICTextureToFile(SwapChainProxy->mContext, back_buffer1, GUID_ContainerFormatPng, L"test1.png");
-			}
+			SwapChainProxy->mContext->ClearRenderTargetView(backbuffRTV, color);
 
 			//D3D11_VIEWPORT vp;
 			//memset(&vp, 0, sizeof(D3D11_VIEWPORT));

@@ -227,11 +227,6 @@ void SkyrimUpscaler::InitUpscaler()
 			mRenderSizeY = GetRenderHeight(0);
 			mRenderScale = float(mRenderSizeX) / mDisplaySizeX;
 		}
-		if (!mTempColor2) {
-			desc.Width  = mRenderSizeX;
-			desc.Height = mRenderSizeY;
-			mD3d11Device->CreateTexture2D(&desc, NULL, &mTempColor2);
-		}
 		mMotionScale[0] = mRenderSizeX;
 		mMotionScale[1] = mRenderSizeY;
 		SetMotionScaleX(0, mMotionScale[0]);
