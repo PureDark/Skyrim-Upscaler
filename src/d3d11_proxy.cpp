@@ -3,42 +3,18 @@
 #include <SettingGUI.h>
 #include <DRS.h>
 #include <SkyrimUpscaler.h>
+#include <ScreenGrab11.h>
+#include <wincodec.h>
+#include <d3dcompiler.h>
+#include <hlsl/flip.vs.inc>
+#include <hlsl/Bicubic.inc>
 
-//DXGISwapChainProxy::DXGISwapChainProxy(IDXGISwapChain* swapChain)
-//{
-//	HRESULT hr = swapChain->QueryInterface<IDXGISwapChain4>(&mSwapChain1);
-//	ID3D11Device* device;
-//	swapChain->GetDevice(IID_PPV_ARGS(&mD3d11Device));
-//}
-//DXGISwapChainProxy::DXGISwapChainProxy(IDXGISwapChain1* swapChain)
-//{
-//	HRESULT       hr = swapChain->QueryInterface<IDXGISwapChain4>(&mSwapChain1);
-//	swapChain->GetDevice(IID_PPV_ARGS(&mD3d11Device));
-//}
-//DXGISwapChainProxy::DXGISwapChainProxy(IDXGISwapChain2* swapChain)
-//{
-//	HRESULT hr = swapChain->QueryInterface<IDXGISwapChain4>(&mSwapChain1);
-//	swapChain->GetDevice(IID_PPV_ARGS(&mD3d11Device));
-//}
-//DXGISwapChainProxy::DXGISwapChainProxy(IDXGISwapChain3* swapChain)
-//{
-//	HRESULT hr = swapChain->QueryInterface<IDXGISwapChain4>(&mSwapChain1);
-//	swapChain->GetDevice(IID_PPV_ARGS(&mD3d11Device));
-//}
 DXGISwapChainProxy::DXGISwapChainProxy(IDXGISwapChain* swapChain)
 {
 	mSwapChain1 = swapChain;
-	swapChain->GetDevice(IID_PPV_ARGS(&mD3d11Device));
-}
-
-DXGISwapChainProxy::DXGISwapChainProxy()
-{
-}
-
-void DXGISwapChainProxy::SetupSwapChain(IDXGISwapChain* swapChain)
-{
-	mSwapChain1 = swapChain;
-	swapChain->GetDevice(IID_PPV_ARGS(&mD3d11Device));
+	swapChain->GetDevice(IID_PPV_ARGS(&mDevice));
+	mDevice->GetImmediateContext(&mContext);
+	InitShader();
 }
 
 IDXGISwapChain* DXGISwapChainProxy::GetCurrentSwapChain(){
@@ -99,22 +75,34 @@ HRESULT STDMETHODCALLTYPE DXGISwapChainProxy::Present(UINT SyncInterval, UINT Fl
 	HRESULT hr;
 	ID3D11Texture2D* back_buffer1;
 	mSwapChain1->GetBuffer(0, IID_PPV_ARGS(&back_buffer1));
-	//D3D11_TEXTURE2D_DESC desc1;
-	//back_buffer1->GetDesc(&desc1);
 	ID3D11Texture2D* back_buffer2;
 	mSwapChain2->GetBuffer(0, IID_PPV_ARGS(&back_buffer2));
-	//D3D11_TEXTURE2D_DESC desc2;
-	//back_buffer2->GetDesc(&desc2);
-	//logger::info("Buffer 1 : {} x {}", desc1.Width, desc1.Height);
-	//logger::info("Buffer 2 : {} x {}", desc2.Width, desc2.Height);
+	// Call Present to inform ENB, but we intercept it to not do actual present
 	hr = mSwapChain2->Present(SyncInterval, Flags);
-	//ID3D11DeviceContext* context;
-	//mD3d11Device->GetImmediateContext(&context);
-	//context->CopyResource(back_buffer1, back_buffer2);
-	SkyrimUpscaler::GetSingleton()->ForceEvaluateUpscaler(back_buffer2, back_buffer1);
-	hr = mSwapChain1->Present(SyncInterval, Flags);
 
-	//usingSwapChain2 = true;
+	if (ImGui::IsKeyReleased(ImGuiKey_Keypad0)) {
+		DirectX::SaveWICTextureToFile(mContext, back_buffer2, GUID_ContainerFormatPng, L"test2.png");
+	}
+
+	static ID3D11RenderTargetView* backBufferView = nullptr;
+	if (backBufferView == nullptr)
+	    mDevice->CreateRenderTargetView(back_buffer1, NULL, &backBufferView);
+
+	static ID3D11ShaderResourceView* shaderResourceView = nullptr;
+	if (shaderResourceView == nullptr)
+		mDevice->CreateShaderResourceView(back_buffer2, NULL, &shaderResourceView);
+	RenderTexture(shaderResourceView, backBufferView, SkyrimUpscaler::GetSingleton()->mDisplaySizeX, SkyrimUpscaler::GetSingleton()->mDisplaySizeY);
+
+	if (ImGui::IsKeyReleased(ImGuiKey_Keypad2)) {
+		DirectX::SaveWICTextureToFile(mContext, SkyrimUpscaler::GetSingleton()->mTempColor, GUID_ContainerFormatPng, L"tempColor.png");
+	}
+
+	if (ImGui::IsKeyReleased(ImGuiKey_Keypad3)) {
+		mContext->CopyResource(SkyrimUpscaler::GetSingleton()->mTempColor2, back_buffer2);
+		DirectX::SaveWICTextureToFile(mContext, SkyrimUpscaler::GetSingleton()->mTempColor, GUID_ContainerFormatPng, L"tempColor2.png");
+	}
+
+	hr = mSwapChain1->Present(SyncInterval, Flags);
 	return hr;
 }
 
@@ -163,124 +151,82 @@ HRESULT STDMETHODCALLTYPE DXGISwapChainProxy::GetLastPresentCount(_Out_ UINT* pL
 	return GetCurrentSwapChain()->GetLastPresentCount(pLastPresentCount);
 }
 
-///****IDXGISwapChain1****/
-//
-//HRESULT STDMETHODCALLTYPE DXGISwapChainProxy::GetDesc1(_Out_ DXGI_SWAP_CHAIN_DESC1* pDesc)
-//{
-//	return GetCurrentSwapChain()->GetDesc1(pDesc);
-//}
-//
-//HRESULT STDMETHODCALLTYPE DXGISwapChainProxy::GetFullscreenDesc(_Out_ DXGI_SWAP_CHAIN_FULLSCREEN_DESC* pDesc)
-//{
-//	return GetCurrentSwapChain()->GetFullscreenDesc(pDesc);
-//}
-//
-//HRESULT STDMETHODCALLTYPE DXGISwapChainProxy::GetHwnd(_Out_ HWND* pHwnd)
-//{
-//	return GetCurrentSwapChain()->GetHwnd(pHwnd);
-//}
-//
-//HRESULT STDMETHODCALLTYPE DXGISwapChainProxy::GetCoreWindow(_In_ REFIID refiid, _COM_Outptr_ void** ppUnk)
-//{
-//	return GetCurrentSwapChain()->GetCoreWindow(refiid, ppUnk);
-//}
-//
-//HRESULT STDMETHODCALLTYPE DXGISwapChainProxy::Present1(UINT SyncInterval, UINT PresentFlags, _In_ const DXGI_PRESENT_PARAMETERS* pPresentParameters)
-//{
-//	return GetCurrentSwapChain()->Present1(SyncInterval, PresentFlags, pPresentParameters);
-//}
-//
-//BOOL STDMETHODCALLTYPE DXGISwapChainProxy::IsTemporaryMonoSupported(void)
-//{
-//	return GetCurrentSwapChain()->IsTemporaryMonoSupported();
-//}
-//
-//HRESULT STDMETHODCALLTYPE DXGISwapChainProxy::GetRestrictToOutput(_Out_ IDXGIOutput** ppRestrictToOutput)
-//{
-//	return GetCurrentSwapChain()->GetRestrictToOutput(ppRestrictToOutput);
-//}
-//
-//HRESULT STDMETHODCALLTYPE DXGISwapChainProxy::SetBackgroundColor(_In_ const DXGI_RGBA* pColor)
-//{
-//	return GetCurrentSwapChain()->SetBackgroundColor(pColor);
-//}
-//
-//HRESULT STDMETHODCALLTYPE DXGISwapChainProxy::GetBackgroundColor(_Out_ DXGI_RGBA* pColor)
-//{
-//	return GetCurrentSwapChain()->GetBackgroundColor(pColor);
-//}
-//
-//HRESULT STDMETHODCALLTYPE DXGISwapChainProxy::SetRotation(_In_ DXGI_MODE_ROTATION Rotation)
-//{
-//	return GetCurrentSwapChain()->SetRotation(Rotation);
-//}
-//
-//HRESULT STDMETHODCALLTYPE DXGISwapChainProxy::GetRotation(_Out_ DXGI_MODE_ROTATION* pRotation)
-//{
-//	return GetCurrentSwapChain()->GetRotation(pRotation);
-//}
-//
-//
-///****IDXGISwapChain2****/
-//HRESULT STDMETHODCALLTYPE DXGISwapChainProxy::SetSourceSize(UINT Width, UINT Height)
-//{
-//	return GetCurrentSwapChain()->SetSourceSize(Width, Height);
-//}
-//
-//HRESULT STDMETHODCALLTYPE DXGISwapChainProxy::GetSourceSize(_Out_ UINT* pWidth, _Out_ UINT* pHeight)
-//{
-//	return GetCurrentSwapChain()->GetSourceSize(pWidth, pHeight);
-//}
-//
-//HRESULT STDMETHODCALLTYPE DXGISwapChainProxy::SetMaximumFrameLatency(UINT MaxLatency)
-//{
-//	return GetCurrentSwapChain()->SetMaximumFrameLatency(MaxLatency);
-//}
-//
-//HRESULT STDMETHODCALLTYPE DXGISwapChainProxy::GetMaximumFrameLatency(_Out_ UINT* pMaxLatency)
-//{
-//	return GetCurrentSwapChain()->GetMaximumFrameLatency(pMaxLatency);
-//}
-//
-//HANDLE STDMETHODCALLTYPE DXGISwapChainProxy::GetFrameLatencyWaitableObject(void)
-//{
-//	return GetCurrentSwapChain()->GetFrameLatencyWaitableObject();
-//}
-//
-//HRESULT STDMETHODCALLTYPE DXGISwapChainProxy::SetMatrixTransform(const DXGI_MATRIX_3X2_F* pMatrix)
-//{
-//	return GetCurrentSwapChain()->SetMatrixTransform(pMatrix);
-//}
-//
-//HRESULT STDMETHODCALLTYPE DXGISwapChainProxy::GetMatrixTransform(_Out_ DXGI_MATRIX_3X2_F* pMatrix)
-//{
-//	return GetCurrentSwapChain()->GetMatrixTransform(pMatrix);
-//}
-//
-///****IDXGISwapChain3****/
-//UINT STDMETHODCALLTYPE DXGISwapChainProxy::GetCurrentBackBufferIndex(void)
-//{
-//	return GetCurrentSwapChain()->GetCurrentBackBufferIndex();
-//}
-//
-//HRESULT STDMETHODCALLTYPE DXGISwapChainProxy::CheckColorSpaceSupport(_In_ DXGI_COLOR_SPACE_TYPE ColorSpace, _Out_ UINT* pColorSpaceSupport)
-//{
-//	return GetCurrentSwapChain()->CheckColorSpaceSupport(ColorSpace, pColorSpaceSupport);
-//}
-//
-//HRESULT STDMETHODCALLTYPE DXGISwapChainProxy::SetColorSpace1(_In_ DXGI_COLOR_SPACE_TYPE ColorSpace)
-//{
-//	return GetCurrentSwapChain()->SetColorSpace1(ColorSpace);
-//}
-//
-//HRESULT STDMETHODCALLTYPE DXGISwapChainProxy::ResizeBuffers1(_In_ UINT BufferCount, _In_ UINT Width, _In_ UINT Height, _In_ DXGI_FORMAT Format,
-//	_In_ UINT SwapChainFlags, _In_reads_(BufferCount) const UINT* pCreationNodeMask, _In_reads_(BufferCount) IUnknown* const* ppPresentQueue)
-//{
-//	return GetCurrentSwapChain()->ResizeBuffers1(BufferCount, Width, Height, Format, SwapChainFlags, pCreationNodeMask, ppPresentQueue);
-//}
-//
-///****IDXGISwapChain4****/
-//HRESULT STDMETHODCALLTYPE DXGISwapChainProxy::SetHDRMetaData(_In_ DXGI_HDR_METADATA_TYPE Type, _In_ UINT Size, _In_reads_opt_(Size) void* pMetaData)
-//{
-//	return GetCurrentSwapChain()->SetHDRMetaData(Type, Size, pMetaData);
-//}
+
+
+void DXGISwapChainProxy::InitShader()
+{
+	mDevice->CreateVertexShader(VS_Flip, sizeof(VS_Flip), nullptr, &mVertexShader);
+	mDevice->CreatePixelShader(Bicubic, sizeof(Bicubic), nullptr, &mPixelShader);
+
+	D3D11_SAMPLER_DESC sd;
+	sd.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
+	sd.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+	sd.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+	sd.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+	sd.MipLODBias = 0;
+	sd.MaxAnisotropy = 1;
+	sd.ComparisonFunc = D3D11_COMPARISON_ALWAYS;
+	sd.MinLOD = 0;
+	sd.MaxLOD = 0;
+	mDevice->CreateSamplerState(&sd, &mSampler);
+
+	D3D11_RASTERIZER_DESC rd;
+	rd.FillMode = D3D11_FILL_SOLID;
+	rd.CullMode = D3D11_CULL_NONE;
+	rd.FrontCounterClockwise = TRUE;
+	rd.DepthBias = 0;
+	rd.DepthBiasClamp = 0;
+	rd.SlopeScaledDepthBias = 0;
+	rd.DepthClipEnable = FALSE;
+	rd.ScissorEnable = FALSE;
+	rd.MultisampleEnable = FALSE;
+	rd.AntialiasedLineEnable = FALSE;
+	mDevice->CreateRasterizerState(&rd, &mRasterizerState);
+
+	D3D11_BLEND_DESC blendDesc;
+	ZeroMemory(&blendDesc, sizeof(blendDesc));
+	auto& rtDesc = blendDesc.RenderTarget[0];
+
+	// Color = SrcAlpha * SrcColor + (1 - SrcAlpha) * DestColor
+	// Alpha = SrcAlpha
+	blendDesc.AlphaToCoverageEnable = false;
+	blendDesc.IndependentBlendEnable = false;
+	rtDesc.BlendEnable = true;
+	rtDesc.SrcBlend = D3D11_BLEND_SRC_ALPHA;
+	rtDesc.DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+	rtDesc.BlendOp = D3D11_BLEND_OP_ADD;
+	rtDesc.SrcBlendAlpha = D3D11_BLEND_ONE;
+	rtDesc.DestBlendAlpha = D3D11_BLEND_ZERO;
+	rtDesc.BlendOpAlpha = D3D11_BLEND_OP_ADD;
+	rtDesc.RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+
+	mDevice->CreateBlendState(&blendDesc, &mBlendState);
+}
+
+void DXGISwapChainProxy::RenderTexture(ID3D11ShaderResourceView* sourceTexture, ID3D11RenderTargetView* target, int width, int height)
+{
+	mContext->OMSetRenderTargets(1, &target, nullptr);
+	mContext->OMSetBlendState(mBlendState, nullptr, 0xffffffff);
+	mContext->OMSetDepthStencilState(nullptr, 0);
+	mContext->VSSetShader(mVertexShader, nullptr, 0);
+	mContext->PSSetShader(mPixelShader, nullptr, 0);
+	mContext->PSSetShaderResources(0, 1, &sourceTexture);
+	mContext->PSSetSamplers(0, 1, &mSampler);
+	mContext->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
+	mContext->IASetVertexBuffers(0, 0, nullptr, nullptr, nullptr);
+	mContext->IASetInputLayout(nullptr);
+	mContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	D3D11_VIEWPORT vp;
+	vp.TopLeftX = vp.TopLeftY = 0;
+	vp.Width = width;
+	vp.Height = height;
+	vp.MinDepth = 0;
+	vp.MaxDepth = 1;
+	mContext->RSSetViewports(1, &vp);
+	mContext->RSSetState(mRasterizerState);
+
+	mContext->Draw(3, 0);
+
+	mContext->OMSetRenderTargets(0, nullptr, nullptr);
+	mContext->PSSetShaderResources(0, 0, nullptr);
+}

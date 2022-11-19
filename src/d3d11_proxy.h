@@ -6,21 +6,24 @@ struct DXGISwapChainProxy;
 struct DXGISwapChainProxy : IDXGISwapChain
 {
 public:
-	bool             usingSwapChain2 = false;
-	IDXGISwapChain*  mSwapChain1;
-	IDXGISwapChain*  mSwapChain2;
-	ID3D11Device*    mD3d11Device;
+	bool                   usingSwapChain2 = false;
+	IDXGISwapChain*        mSwapChain1{ nullptr };
+	IDXGISwapChain*        mSwapChain2{ nullptr };
+	ID3D11Device*          mDevice{ nullptr };
+	ID3D11DeviceContext*   mContext{ nullptr };
+	ID3D11VertexShader*    mVertexShader{ nullptr };
+	ID3D11PixelShader*     mPixelShader{ nullptr };
+	ID3D11SamplerState*    mSampler{ nullptr };
+	ID3D11RasterizerState* mRasterizerState{ nullptr };
+	ID3D11BlendState*      mBlendState{ nullptr };
 
-	DXGISwapChainProxy();
 	DXGISwapChainProxy(IDXGISwapChain* swapChain);
-	//DXGISwapChainProxy(IDXGISwapChain1* swapChain);
-	//DXGISwapChainProxy(IDXGISwapChain2* swapChain);
-	//DXGISwapChainProxy(IDXGISwapChain3* swapChain);
-	//DXGISwapChainProxy(IDXGISwapChain4* swapChain);
-
-	void SetupSwapChain(IDXGISwapChain* swapChain);
 
 	IDXGISwapChain* GetCurrentSwapChain();
+
+	void InitShader();
+
+	void RenderTexture(ID3D11ShaderResourceView* sourceTexture, ID3D11RenderTargetView* target, int width, int height);
 
 	/****IUnknown****/
 	virtual HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvObj) override;

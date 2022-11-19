@@ -1,14 +1,14 @@
 #pragma once
 #include <d3d11.h>
 #include <dxgi.h>
-
 #include <Detours.h>
 #include "SkyrimUpscaler.h"
 #include "SettingGUI.h"
-
-#include <Detours.h>
-#include "DRS.h"
 #include "d3d11_proxy.h"
+#include "ScreenGrab11.h"
+#include "imgui.h"
+#include <wincodec.h>
+#include <DRS.h>
 
 static DXGISwapChainProxy* SwapChainProxy;
 
@@ -32,48 +32,14 @@ static void MyLog(char* message, int size)
 	logger::info("{}", message);
 }
 
-// Mostly from vrperfkit, thanks to fholger for showing how to do mip lod bias
-// https://github.com/fholger/vrperfkit/blob/037c09f3168ac045b5775e8d1a0c8ac982b5854f/src/d3d11/d3d11_post_processor.cpp#L76
-static void SetMipLodBias(ID3D11SamplerState** outSamplers, UINT StartSlot, UINT NumSamplers, ID3D11SamplerState* const* ppSamplers)
-{
-	if (mipLodBias != SkyrimUpscaler::GetSingleton()->mMipLodBias) {
-		logger::info("MIP LOD Bias changed from  {} to {}, recreating samplers", mipLodBias, SkyrimUpscaler::GetSingleton()->mMipLodBias);
-		passThroughSamplers.clear();
-		mappedSamplers.clear();
-		mipLodBias = SkyrimUpscaler::GetSingleton()->mMipLodBias;
-	}
-	memcpy(outSamplers, ppSamplers, NumSamplers * sizeof(ID3D11SamplerState*));
-	for (UINT i = 0; i < NumSamplers; ++i) {
-		auto orig = outSamplers[i];
-		if (orig == nullptr || passThroughSamplers.find(orig) != passThroughSamplers.end()) {
-			continue;
-		}
-		if (mappedSamplers.find(orig) == mappedSamplers.end()) {
-			D3D11_SAMPLER_DESC sd;
-			orig->GetDesc(&sd);
-			if (sd.MipLODBias != 0 || sd.MaxAnisotropy <= 1) {
-				// do not mess with samplers that already have a bias or are not doing anisotropic filtering.
-				// should hopefully reduce the chance of causing rendering errors.
-				passThroughSamplers.insert(orig);
-				continue;
-			}
-			sd.MipLODBias = mipLodBias;
-
-			SkyrimUpscaler::GetSingleton()->mD3d11Device->CreateSamplerState(&sd, &mappedSamplers[orig]);
-			passThroughSamplers.insert(mappedSamplers[orig]);
-		}
-		outSamplers[i] = mappedSamplers[orig];
-	}
-}
-
 HRESULT WINAPI hk_IDXGISwapChain_Present(IDXGISwapChain* This, UINT SyncInterval, UINT Flags)
 {
+	// Prevents swapchain2 from actually doing present, saving performance
+	// It's needed for ENB to be informed, but not needed to do actual present
 	static int i = 0;
 	if (i++%2 == 0)
 		return 0;
-	//SettingGUI::GetSingleton()->OnRender();
 	auto hr = (This->*ptrPresent)(SyncInterval, Flags);
-	//DRS::GetSingleton()->Update();
 	return hr;
 }
 
@@ -105,6 +71,40 @@ HRESULT WINAPI hk_ID3D11Device_CreateTexture2D(ID3D11Device* This, const D3D11_T
 		}
 	}
 	return hr;
+}
+
+// Mostly from vrperfkit, thanks to fholger for showing how to do mip lod bias
+// https://github.com/fholger/vrperfkit/blob/037c09f3168ac045b5775e8d1a0c8ac982b5854f/src/d3d11/d3d11_post_processor.cpp#L76
+static void SetMipLodBias(ID3D11SamplerState** outSamplers, UINT StartSlot, UINT NumSamplers, ID3D11SamplerState* const* ppSamplers)
+{
+	if (mipLodBias != SkyrimUpscaler::GetSingleton()->mMipLodBias) {
+		logger::info("MIP LOD Bias changed from  {} to {}, recreating samplers", mipLodBias, SkyrimUpscaler::GetSingleton()->mMipLodBias);
+		passThroughSamplers.clear();
+		mappedSamplers.clear();
+		mipLodBias = SkyrimUpscaler::GetSingleton()->mMipLodBias;
+	}
+	memcpy(outSamplers, ppSamplers, NumSamplers * sizeof(ID3D11SamplerState*));
+	for (UINT i = 0; i < NumSamplers; ++i) {
+		auto orig = outSamplers[i];
+		if (orig == nullptr || passThroughSamplers.find(orig) != passThroughSamplers.end()) {
+			continue;
+		}
+		if (mappedSamplers.find(orig) == mappedSamplers.end()) {
+			D3D11_SAMPLER_DESC sd;
+			orig->GetDesc(&sd);
+			if (sd.MipLODBias != 0 || sd.MaxAnisotropy <= 1) {
+				// do not mess with samplers that already have a bias or are not doing anisotropic filtering.
+				// should hopefully reduce the chance of causing rendering errors.
+				passThroughSamplers.insert(orig);
+				continue;
+			}
+			sd.MipLODBias = DRS::GetSingleton()->reset ? 0 : mipLodBias;
+
+			SkyrimUpscaler::GetSingleton()->mD3d11Device->CreateSamplerState(&sd, &mappedSamplers[orig]);
+			passThroughSamplers.insert(mappedSamplers[orig]);
+		}
+		outSamplers[i] = mappedSamplers[orig];
+	}
 }
 
 void WINAPI hk_ID3D11DeviceContext_PSSetSamplers(ID3D11DeviceContext* This, UINT StartSlot, UINT NumSamplers, ID3D11SamplerState* const* ppSamplers)
@@ -230,6 +230,7 @@ HRESULT WINAPI hk_D3D11CreateDeviceAndSwapChain(
 	*(uintptr_t*)&ptrDSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_DSSetSamplers, 65);
 	*(uintptr_t*)&ptrCSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_CSSetSamplers, 70);
 
+	// Replace the reference of the original swapchain with the ENB swapChain wrapper
 	SwapChainProxy->mSwapChain2 = swapChain;
 	SwapChainProxy->usingSwapChain2 = true;
 	*ppSwapChain = SwapChainProxy;
@@ -237,18 +238,20 @@ HRESULT WINAPI hk_D3D11CreateDeviceAndSwapChain(
 	return hr;
 }
 
+static ID3D11RenderTargetView* gRenderTargetView = nullptr;
+static ID3D11DepthStencilView* gDepthStencilView = nullptr;
+
 struct UpscalerHooks
 {
 
-	//struct BSGraphics_Renderer_Init_InitD3D
-	//{
-	//	static void thunk()
-	//	{
-	//		func();
-	//		SwapChainProxy->usingSwapChain2 = false;
-	//	}
-	//	static inline REL::Relocation<decltype(thunk)> func;
-	//};
+	struct BSGraphics_Renderer_Init_InitD3D
+	{
+		static void thunk()
+		{
+			func();
+		}
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
 
 	struct Main_DrawWorld_MainDraw
 	{
@@ -256,14 +259,34 @@ struct UpscalerHooks
 		{
 			func(BSGraphics_Renderer, unk);
 			//SkyrimUpscaler::GetSingleton()->EvaluateUpscaler();
-			//if (SwapChainProxy == nullptr)
-			//	return;
-			//ID3D11Texture2D* back_buffer1;
-			//SwapChainProxy->mSwapChain1->GetBuffer(0, IID_PPV_ARGS(&back_buffer1));
-			//ID3D11Texture2D* back_buffer2;
-			//SwapChainProxy->mSwapChain2->GetBuffer(0, IID_PPV_ARGS(&back_buffer2));
-			//SkyrimUpscaler::GetSingleton()->ForceEvaluateUpscaler(back_buffer2, back_buffer1);
-			//SwapChainProxy->usingSwapChain2 = false;
+			ID3D11Texture2D* back_buffer1;
+			SwapChainProxy->mSwapChain1->GetBuffer(0, IID_PPV_ARGS(&back_buffer1));
+			ID3D11Texture2D* back_buffer2;
+			SwapChainProxy->mSwapChain2->GetBuffer(0, IID_PPV_ARGS(&back_buffer2));
+			SkyrimUpscaler::GetSingleton()->ForceEvaluateUpscaler(back_buffer2, back_buffer1);
+
+			if (gRenderTargetView == nullptr) {
+				SwapChainProxy->mDevice->CreateRenderTargetView(back_buffer2, NULL, &gRenderTargetView);
+			}
+			const FLOAT color[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+			SwapChainProxy->mContext->ClearRenderTargetView(gRenderTargetView, color);
+
+			if (ImGui::IsKeyReleased(ImGuiKey_Keypad1)) {
+				DirectX::SaveWICTextureToFile(SwapChainProxy->mContext, back_buffer1, GUID_ContainerFormatPng, L"test1.png");
+			}
+
+			//D3D11_VIEWPORT vp;
+			//memset(&vp, 0, sizeof(D3D11_VIEWPORT));
+			//vp.Width = SkyrimUpscaler::GetSingleton()->mDisplaySizeX;
+			//vp.Height = SkyrimUpscaler::GetSingleton()->mDisplaySizeY;
+			//vp.MinDepth = 0.0f;
+			//vp.MaxDepth = 1.0f;
+			//vp.TopLeftX = vp.TopLeftY = 0;
+			//context->RSSetViewports(1, &vp);
+			//hr = SwapChainProxy->mSwapChain2->Present(0, 0);
+
+			//context->CopyResource(back_buffer1, allTextures[index]);
+			//logger::info("Displaying Texture {}/{}", index, texSize);
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
@@ -311,7 +334,7 @@ struct UpscalerHooks
 	{
 		// Hook for getting the swapchain
 		// Nope, depth and motion texture are already created after this function, so can't use it
-		// stl::write_thunk_call<BSGraphics_Renderer_Init_InitD3D>(REL::RelocationID(75595, 77226).address() + REL::Relocate(0x50, 0x2BC));
+		stl::write_thunk_call<BSGraphics_Renderer_Init_InitD3D>(REL::RelocationID(75595, 77226).address() + REL::Relocate(0x50, 0x2BC));
 		// Have to hook the creation of SwapChain to hook CreateTexture2D before depth and motion textures are created
 		char* ptr = nullptr;
 		auto  moduleBase = (uintptr_t)GetModuleHandle(ptr);

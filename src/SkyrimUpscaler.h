@@ -73,6 +73,7 @@ public:
 	bool mUseOptimalMipLodBias{ true };
 
 	ID3D11Texture2D* mTempColor{ nullptr };
+	ID3D11Texture2D* mTempColor2{ nullptr };
 	ID3D11Texture2D* mOutColor{ nullptr };
 	ID3D11Texture2D* mMotionVectorsEmpty{ nullptr };
 	ID3D11Texture2D* mDepthBuffer{ nullptr };
