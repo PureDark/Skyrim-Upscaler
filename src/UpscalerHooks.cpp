@@ -259,8 +259,14 @@ struct UpscalerHooks
 		static REL::Relocation<uintptr_t> buildCameraStateDataHook{ REL::RelocationID(75711, 77520) };  // D7D130, DB9850
 		uint8_t                           patch1[] = { 0x90, 0x90, 0x90, 0x90, 0x90, 0x90 };
 		uint8_t                           patch2[] = { 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90 };
-		REL::safe_write<uint8_t>(updateJitterHook.address() + REL::Relocate(0xE, 0x11, 0x17), patch1);
-		REL::safe_write<uint8_t>(buildCameraStateDataHook.address() + REL::Relocate(0x1D5, 0x1D5, 0x34), patch2);
+		uint8_t                           patch3[] = { 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90};
+		if (!REL::Module::IsVR()) {
+			REL::safe_write<uint8_t>(updateJitterHook.address() + REL::Relocate(0xE, 0x11), patch1);
+			REL::safe_write<uint8_t>(buildCameraStateDataHook.address() + REL::Relocate(0x1D5, 0x1D5), patch2);
+		} else {
+			REL::safe_write<uint8_t>(updateJitterHook.address() + 0x17, patch2);
+			REL::safe_write<uint8_t>(buildCameraStateDataHook.address() + 0x34, patch3);
+		}
 		logger::info("Installed upscaler hooks");
 	}
 };
