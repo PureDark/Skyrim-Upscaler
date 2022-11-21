@@ -5,9 +5,7 @@
 #include "SkyrimUpscaler.h"
 #include "SettingGUI.h"
 #include "d3d11_proxy.h"
-#include "ScreenGrab11.h"
 #include "imgui.h"
-#include <wincodec.h>
 #include <DRS.h>
 
 static DXGISwapChainProxy* SwapChainProxy;
@@ -261,13 +259,13 @@ struct UpscalerHooks
 			ID3D11Texture2D* back_buffer2;
 			SwapChainProxy->mSwapChain2->GetBuffer(0, IID_PPV_ARGS(&back_buffer2));
 			SkyrimUpscaler::GetSingleton()->ForceEvaluateUpscaler(back_buffer2, back_buffer1);
-			static ID3D11RenderTargetView* backbuffRTV;
-			if (backbuffRTV == nullptr) {
-				SwapChainProxy->mDevice->CreateRenderTargetView(back_buffer2, NULL, &backbuffRTV);
+			static ID3D11RenderTargetView* backbufferRTV;
+			if (backbufferRTV == nullptr) {
+				SwapChainProxy->mDevice->CreateRenderTargetView(back_buffer2, NULL, &backbufferRTV);
 			}
 
 			const FLOAT color[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-			SwapChainProxy->mContext->ClearRenderTargetView(backbuffRTV, color);
+			SwapChainProxy->mContext->ClearRenderTargetView(backbufferRTV, color);
 
 			//D3D11_VIEWPORT vp;
 			//memset(&vp, 0, sizeof(D3D11_VIEWPORT));

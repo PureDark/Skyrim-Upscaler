@@ -13,6 +13,7 @@ public:
 	ID3D11DeviceContext*   mContext{ nullptr };
 	ID3D11VertexShader*    mVertexShader{ nullptr };
 	ID3D11PixelShader*     mPixelShader{ nullptr };
+	ID3D11PixelShader*     mPixelShader2{ nullptr };
 	ID3D11SamplerState*    mSampler{ nullptr };
 	ID3D11RasterizerState* mRasterizerState{ nullptr };
 	ID3D11BlendState*      mBlendState{ nullptr };
@@ -23,7 +24,7 @@ public:
 
 	void InitShader();
 
-	void RenderTexture(ID3D11ShaderResourceView* sourceTexture, ID3D11RenderTargetView* target, int width, int height);
+	void RenderTexture(ID3D11ShaderResourceView* sourceTexture, ID3D11RenderTargetView* target, int width, int height, ID3D11ShaderResourceView* extraSRV = nullptr);
 
 	/****IUnknown****/
 	virtual HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvObj) override;

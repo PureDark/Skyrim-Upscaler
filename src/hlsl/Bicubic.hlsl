@@ -57,7 +57,7 @@ float4 weight4(float x)
 float4 main(in float4 position: SV_POSITION,
 			in float2 uv: TEXCOORD0) :SV_TARGET
 {
-	float2 inputSize;
+	float2 inputSize = float2(1280, 720);
 	INPUT.GetDimensions(inputSize.x, inputSize.y);
 	const float2 inputPt = 1.0f / inputSize;
 
