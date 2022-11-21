@@ -96,8 +96,9 @@ static void SetMipLodBias(ID3D11SamplerState** outSamplers, UINT StartSlot, UINT
 				passThroughSamplers.insert(orig);
 				continue;
 			}
-			sd.MipLODBias = DRS::GetSingleton()->reset ? 0 : mipLodBias;
-
+			if (!DRS::GetSingleton()->reset) 
+				continue;
+			sd.MipLODBias = mipLodBias;
 			SkyrimUpscaler::GetSingleton()->mD3d11Device->CreateSamplerState(&sd, &mappedSamplers[orig]);
 			passThroughSamplers.insert(mappedSamplers[orig]);
 		}
@@ -239,19 +240,24 @@ HRESULT WINAPI hk_D3D11CreateDeviceAndSwapChain(
 struct UpscalerHooks
 {
 
-	struct BSGraphics_Renderer_Init_InitD3D
-	{
-		static void thunk()
-		{
-			func();
-		}
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
+	//struct BSGraphics_Renderer_Init_InitD3D
+	//{
+	//	static void thunk()
+	//	{
+	//		func();
+	//	}
+	//	static inline REL::Relocation<decltype(thunk)> func;
+	//};
 
 	struct Main_DrawWorld_MainDraw
 	{
 		static void thunk(INT64 BSGraphics_Renderer, int unk)
 		{
+			static bool initTAA = false;
+			if (!initTAA) {
+				initTAA = true;
+				UnkOuterStruct::GetSingleton()->SetTAA(SkyrimUpscaler::GetSingleton()->mUpscaleType == TAA);
+			}
 			func(BSGraphics_Renderer, unk);
 			//SkyrimUpscaler::GetSingleton()->EvaluateUpscaler();
 			ID3D11Texture2D* back_buffer1;
@@ -326,7 +332,7 @@ struct UpscalerHooks
 	{
 		// Hook for getting the swapchain
 		// Nope, depth and motion texture are already created after this function, so can't use it
-		stl::write_thunk_call<BSGraphics_Renderer_Init_InitD3D>(REL::RelocationID(75595, 77226).address() + REL::Relocate(0x50, 0x2BC));
+		// stl::write_thunk_call<BSGraphics_Renderer_Init_InitD3D>(REL::RelocationID(75595, 77226).address() + REL::Relocate(0x50, 0x2BC));
 		// Have to hook the creation of SwapChain to hook CreateTexture2D before depth and motion textures are created
 		char* ptr = nullptr;
 		auto  moduleBase = (uintptr_t)GetModuleHandle(ptr);

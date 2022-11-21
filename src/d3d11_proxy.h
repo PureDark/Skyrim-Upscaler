@@ -20,7 +20,7 @@ public:
 
 	DXGISwapChainProxy(IDXGISwapChain* swapChain);
 
-	IDXGISwapChain* GetCurrentSwapChain();
+	inline IDXGISwapChain* GetCurrentSwapChain();
 
 	void InitShader();
 

@@ -117,8 +117,10 @@ void SettingGUI::OnRender()
 		imgui_combo_names.push_back("DLSS");
 		imgui_combo_names.push_back("FSR2");
 		imgui_combo_names.push_back("XeSS");
-		imgui_combo_names.push_back("DLAA");
-		imgui_combo_names.push_back("TAA");
+		if (SkyrimUpscaler::GetSingleton()->mUpscaleType >= DLAA) {
+			imgui_combo_names.push_back("DLAA");
+			imgui_combo_names.push_back("TAA");
+		}
 
 		if (ImGui::Combo("Upscale Type", (int*)&SkyrimUpscaler::GetSingleton()->mUpscaleType, imgui_combo_names.data(), imgui_combo_names.size())) {
 			if (SkyrimUpscaler::GetSingleton()->mUpscaleType < 0 || SkyrimUpscaler::GetSingleton()->mUpscaleType >= imgui_combo_names.size()) {
@@ -132,11 +134,12 @@ void SettingGUI::OnRender()
 			? "Performance\0Balanced\0Quality\0UltraQuality\0" 
 			: "Performance\0Balanced\0Quality\0UltraPerformance\0";
 
-		ImGui::BeginDisabled(SkyrimUpscaler::GetSingleton()->mUpscaleType == TAA);
+		ImGui::BeginDisabled(SkyrimUpscaler::GetSingleton()->mUpscaleType < DLAA);
 		if (ImGui::Combo("Quality Level", (int*)&SkyrimUpscaler::GetSingleton()->mQualityLevel, qualities)) {
 			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 			SkyrimUpscaler::GetSingleton()->InitUpscaler();
 		}
+		ImGui::EndDisabled();
 
 		const auto w = (float)GetRenderWidth(0);
 		const auto h = (float)GetRenderHeight(0);
@@ -145,7 +148,6 @@ void SettingGUI::OnRender()
 			ImGui::DragFloat("MotionScale Y", &SkyrimUpscaler::GetSingleton()->mMotionScale[1], 0.01f, -h, h)) {
 			SkyrimUpscaler::GetSingleton()->SetMotionScale(SkyrimUpscaler::GetSingleton()->mMotionScale[0], SkyrimUpscaler::GetSingleton()->mMotionScale[1]);
 		}
-		ImGui::EndDisabled();
 
 		ImGui::Spacing();
 		ImGui::Separator();

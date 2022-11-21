@@ -16,7 +16,8 @@ DXGISwapChainProxy::DXGISwapChainProxy(IDXGISwapChain* swapChain)
 	InitShader();
 }
 
-IDXGISwapChain* DXGISwapChainProxy::GetCurrentSwapChain(){
+inline IDXGISwapChain* DXGISwapChainProxy::GetCurrentSwapChain()
+{
 	return (usingSwapChain2) ? mSwapChain2 : mSwapChain1;
 }
 
