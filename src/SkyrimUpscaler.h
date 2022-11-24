@@ -49,6 +49,49 @@ enum UpscaleType
 	TAA
 };
 
+struct ImageWrapper
+{
+public:
+	ID3D11Texture2D*          mImage{ nullptr };
+	ID3D11RenderTargetView*   mRTV{ nullptr };
+	ID3D11ShaderResourceView* mSRV{ nullptr };
+	ID3D11DepthStencilView*   mDSV{ nullptr };
+	ID3D11RenderTargetView* GetRTV() {
+		if (mImage!= nullptr && mRTV == nullptr) {
+			ID3D11Device* device;
+			mImage->GetDevice(&device);
+			device->CreateRenderTargetView(mImage, NULL, &mRTV);
+		}
+		return mRTV;
+	}
+	ID3D11ShaderResourceView* GetSRV()
+	{
+		if (mImage != nullptr && mSRV == nullptr) {
+			ID3D11Device* device;
+			mImage->GetDevice(&device);
+			device->CreateShaderResourceView(mImage, NULL, &mSRV);
+		}
+		return mSRV;
+	}
+	ID3D11DepthStencilView* GetDSV(D3D11_DEPTH_STENCIL_VIEW_DESC pDesc)
+	{
+		if (mImage != nullptr && mDSV == nullptr) {
+			ID3D11Device* device;
+			mImage->GetDevice(&device);
+			device->CreateDepthStencilView(mImage, &pDesc, &mDSV);
+		}
+		return mDSV;
+	}
+	void Release() {
+		if (mImage)
+			mImage->Release();
+		if (mRTV)
+			mRTV->Release();
+		if (mSRV)
+			mSRV->Release();
+	}
+};
+
 class SkyrimUpscaler
 {
 public:
@@ -72,13 +115,13 @@ public:
 	bool mDisableResultCopying{ false };
 	bool mUseOptimalMipLodBias{ true };
 
-	ID3D11Texture2D* mTempColor{ nullptr };
-	ID3D11Texture2D* mOutColor{ nullptr };
-	ID3D11Texture2D* mMotionVectorsEmpty{ nullptr };
-	ID3D11Texture2D* mDepthBuffer{ nullptr };
-	ID3D11Texture2D* mMotionVectors{ nullptr };
+	ImageWrapper     mTempColor;
+	ImageWrapper     mOutColor;
+	ImageWrapper     mMotionVectorsEmpty;
+	ImageWrapper     mDepthBuffer;
+	ImageWrapper     mMotionVectors;
 	IDXGISwapChain*  mSwapChain{ nullptr };
-	ID3D11Device*    mD3d11Device{ nullptr };
+	ID3D11Device*    mDevice{ nullptr };
 
 	~SkyrimUpscaler() {}
 

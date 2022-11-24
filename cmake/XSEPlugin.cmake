@@ -131,6 +131,12 @@ if (CMAKE_GENERATOR MATCHES "Visual Studio")
 			"$<$<CONFIG:DEBUG>:/INCREMENTAL;/OPT:NOREF;/OPT:NOICF>"
 			"$<$<CONFIG:RELEASE>:/LTCG;/INCREMENTAL:NO;/OPT:REF;/OPT:ICF;/DEBUG:FULL>"
 	)
+
+	set(list_of_dlls PDPerfPlugin.dll)
+	foreach(dll_name ${list_of_dlls})
+	   set(space_separated_list "${space_separated_list} /DELAYLOAD:${dll_name}")
+	endforeach()
+	set_target_properties(${PROJECT_NAME}  PROPERTIES LINK_FLAGS "${space_separated_list}")
 endif()
 
 find_package(nlohmann_json CONFIG REQUIRED)

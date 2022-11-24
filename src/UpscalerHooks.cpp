@@ -28,6 +28,45 @@ static void MyLog(char* message, int size)
 	logger::info("{}", message);
 }
 
+HRESULT WINAPI hk_IDXGISwapChain_Present(IDXGISwapChain* This, UINT SyncInterval, UINT Flags)
+{
+	SettingGUI::GetSingleton()->OnRender();
+	auto hr = (This->*ptrPresent)(SyncInterval, Flags);
+	DRS::GetSingleton()->Update();
+	return hr;
+}
+
+HRESULT WINAPI hk_ID3D11Device_CreateTexture2D(ID3D11Device* This, const D3D11_TEXTURE2D_DESC* pDesc, const D3D11_SUBRESOURCE_DATA* pInitialData, ID3D11Texture2D** ppTexture2D)
+{
+	auto hr = (This->*ptrCreateTexture2D)(pDesc, pInitialData, ppTexture2D);
+	if (pDesc->Format >= DXGI_FORMAT_R16G16_TYPELESS && pDesc->Format <= DXGI_FORMAT_R16G16_SINT) {
+		bool exist = false;
+		for (const motion_item& item : SettingGUI::GetSingleton()->sorted_item_list) {
+			if (item.resource == *ppTexture2D)
+				exist = true;
+		}
+		if (!exist) {
+			motion_item item = { 1u, *ppTexture2D, *pDesc };
+			if (SettingGUI::GetSingleton()->sorted_item_list.size() == 0) {
+				SettingGUI::GetSingleton()->sorted_item_list.push_back(item);
+				SettingGUI::GetSingleton()->selected_item = item;
+				SkyrimUpscaler::GetSingleton()->SetupMotionVector(SettingGUI::GetSingleton()->selected_item.resource);
+				SkyrimUpscaler::GetSingleton()->InitUpscaler();
+				logger::info("Motion Vertor Found : {} x {}", pDesc->Width, pDesc->Height);
+			}
+		}
+	} else if (pDesc->Format >= DXGI_FORMAT_R24G8_TYPELESS && pDesc->Format <= DXGI_FORMAT_X24_TYPELESS_G8_UINT) {
+		if (pDesc->Width == SkyrimUpscaler::GetSingleton()->mDisplaySizeX &&
+			pDesc->Height == SkyrimUpscaler::GetSingleton()->mDisplaySizeY &&
+			pDesc->BindFlags & D3D11_BIND_DEPTH_STENCIL &&
+			SkyrimUpscaler::GetSingleton()->mDepthBuffer.mImage == nullptr) {
+			SkyrimUpscaler::GetSingleton()->SetupDepth(*ppTexture2D);
+			logger::info("Depth Buffer Found : {} x {}", pDesc->Width, pDesc->Height);
+		}
+	}
+	return hr;
+}
+
 // Mostly from vrperfkit, thanks to fholger for showing how to do mip lod bias
 // https://github.com/fholger/vrperfkit/blob/037c09f3168ac045b5775e8d1a0c8ac982b5854f/src/d3d11/d3d11_post_processor.cpp#L76
 static void SetMipLodBias(ID3D11SamplerState** outSamplers, UINT StartSlot, UINT NumSamplers, ID3D11SamplerState* const* ppSamplers)
@@ -60,44 +99,6 @@ static void SetMipLodBias(ID3D11SamplerState** outSamplers, UINT StartSlot, UINT
 		}
 		outSamplers[i] = mappedSamplers[orig];
 	}
-}
-
-HRESULT WINAPI hk_IDXGISwapChain_Present(IDXGISwapChain* This, UINT SyncInterval, UINT Flags)
-{
-	SettingGUI::GetSingleton()->OnRender();
-	auto hr = (This->*ptrPresent)(SyncInterval, Flags);
-	DRS::GetSingleton()->Update();
-	return hr;
-}
-
-HRESULT WINAPI hk_ID3D11Device_CreateTexture2D(ID3D11Device* This, const D3D11_TEXTURE2D_DESC* pDesc, const D3D11_SUBRESOURCE_DATA* pInitialData, ID3D11Texture2D** ppTexture2D)
-{
-	auto hr = (This->*ptrCreateTexture2D)(pDesc, pInitialData, ppTexture2D);
-	if (pDesc->Format >= DXGI_FORMAT_R16G16_TYPELESS && pDesc->Format <= DXGI_FORMAT_R16G16_SINT) {
-		bool exist = false;
-		for (const motion_item& item : SettingGUI::GetSingleton()->sorted_item_list) {
-			if (item.resource == *ppTexture2D)
-				exist = true;
-		}
-		if (!exist) {
-			motion_item item = { 1u, *ppTexture2D, *pDesc };
-			if (SettingGUI::GetSingleton()->sorted_item_list.size() == 0) {
-				SettingGUI::GetSingleton()->sorted_item_list.push_back(item);
-				SettingGUI::GetSingleton()->selected_item = item;
-				SkyrimUpscaler::GetSingleton()->SetupMotionVector(SettingGUI::GetSingleton()->selected_item.resource);
-				SkyrimUpscaler::GetSingleton()->InitUpscaler();
-				logger::info("Motion Vertor Found : {} x {}", pDesc->Width, pDesc->Height);
-			}
-		}
-	} else if (pDesc->Format >= DXGI_FORMAT_R24G8_TYPELESS && pDesc->Format <= DXGI_FORMAT_X24_TYPELESS_G8_UINT) {
-		if (pDesc->Width == SkyrimUpscaler::GetSingleton()->mDisplaySizeX &&
-			pDesc->Height == SkyrimUpscaler::GetSingleton()->mDisplaySizeY &&
-			SkyrimUpscaler::GetSingleton()->mDepthBuffer == nullptr) {
-			SkyrimUpscaler::GetSingleton()->SetupDepth(*ppTexture2D);
-			logger::info("Depth Buffer Found : {} x {}", pDesc->Width, pDesc->Height);
-		}
-	}
-	return hr;
 }
 
 void WINAPI hk_ID3D11DeviceContext_PSSetSamplers(ID3D11DeviceContext* This, UINT StartSlot, UINT NumSamplers, ID3D11SamplerState* const* ppSamplers)

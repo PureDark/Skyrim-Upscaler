@@ -41,4 +41,16 @@ function(add_cxx_files TARGET)
 		FILES ${SOURCE_FILES})
 
 	target_sources("${TARGET}" PRIVATE ${SOURCE_FILES})
+	
+	file(GLOB_RECURSE SHADER_FILES
+		LIST_DIRECTORIES false
+		CONFIGURE_DEPENDS
+		"src/hlsl/*.inc"
+	)
+
+	source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/src
+		PREFIX "Shader Files"
+		FILES ${SHADER_FILES})
+
+	target_sources("${TARGET}" PRIVATE ${SHADER_FILES})
 endfunction()
