@@ -53,6 +53,11 @@ void DRS::MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 	}
 }
 
+bool DRS::IsInFullscreenMenu()
+{
+	return isInMainMenu || isInLoadingMenu;
+}
+
 // Fader Menu
 // Mist Menu
 // Loading Menu
@@ -60,20 +65,31 @@ void DRS::MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 
 RE::BSEventNotifyControl MenuOpenCloseEventHandler::ProcessEvent(const RE::MenuOpenCloseEvent* a_event, RE::BSTEventSource<RE::MenuOpenCloseEvent>*)
 {
-	if (a_event->menuName == RE::LoadingMenu::MENU_NAME ||
-		a_event->menuName == RE::RaceSexMenu::MENU_NAME) {
+	if (a_event->menuName == RE::MainMenu::MENU_NAME) {
 		if (a_event->opening) {
-			DRS::GetSingleton()->reset = true;
-			DRS::GetSingleton()->ResetScale();
+			DRS::GetSingleton()->isInMainMenu = true;
 		} else {
-			DRS::GetSingleton()->reset = false;
-			DRS::GetSingleton()->ControlResolution();
+			DRS::GetSingleton()->isInMainMenu = false;
 		}
 	}
-	else if (a_event->menuName == RE::FaderMenu::MENU_NAME) {
-		if (!a_event->opening) {
-			DRS::GetSingleton()->reset = false;
-			DRS::GetSingleton()->ControlResolution();
+	else if (a_event->menuName == RE::LoadingMenu::MENU_NAME) {
+		if (a_event->opening) {
+			DRS::GetSingleton()->isInLoadingMenu = true;
+		} else {
+			DRS::GetSingleton()->isInLoadingMenu = false;
+		}
+	}
+	else if (a_event->menuName == RE::MagicMenu::MENU_NAME) {
+		if (a_event->opening) {
+			DRS::GetSingleton()->isInMagicMenu = true;
+		} else {
+			DRS::GetSingleton()->isInMagicMenu = false;
+		}
+	} else if (a_event->menuName == RE::StatsMenu::MENU_NAME) {
+		if (a_event->opening) {
+			DRS::GetSingleton()->isInStatsMenu = true;
+		} else {
+			DRS::GetSingleton()->isInStatsMenu = false;
 		}
 	}
 

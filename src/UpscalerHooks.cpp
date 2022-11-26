@@ -25,17 +25,62 @@ decltype(&ID3D11DeviceContext::HSSetSamplers) ptrHSSetSamplers;
 decltype(&ID3D11DeviceContext::DSSetSamplers) ptrDSSetSamplers;
 decltype(&ID3D11DeviceContext::CSSetSamplers) ptrCSSetSamplers;
 
+decltype(&ID3D11DeviceContext::OMSetRenderTargets) ptrOMSetRenderTargets;
+decltype(&ID3D11DeviceContext::RSSetViewports)     ptrRSSetViewports;
+static bool                                        switchRTV = false;
+static ID3D11Texture2D*                            backbuffer;
+static ID3D11Texture2D*                            backbuffer2;
+static ID3D11RenderTargetView*                     backbufferRTV;
+static ID3D11RenderTargetView*                     backbuffer2RTV;
+
 static void MyLog(char* message, int size)
 {
 	logger::info("{}", message);
 }
 
+void WINAPI hk_ID3D11DeviceContext_OMSetRenderTargets(ID3D11DeviceContext* This, UINT NumViews, ID3D11RenderTargetView* const* ppRenderTargetViews, ID3D11DepthStencilView* pDepthStencilView)
+{
+	if (backbufferRTV != nullptr && switchRTV && NumViews > 0) {
+		ID3D11RenderTargetView* rtvs[2] = { backbufferRTV, nullptr };
+		ID3D11Resource* resource;
+		ppRenderTargetViews[0]->GetResource(&resource);
+		if (resource == backbuffer2) {
+			if (NumViews > 1)
+				rtvs[1] = SkyrimUpscaler::GetSingleton()->mMotionVectorsEmpty.GetRTV();
+			auto dsv = (pDepthStencilView != nullptr) ? SkyrimUpscaler::GetSingleton()->mTempDepthBuffer.GetDSV() : nullptr;
+			(This->*ptrOMSetRenderTargets)(NumViews, rtvs, dsv);
+			return;
+		}
+	}
+	(This->*ptrOMSetRenderTargets)(NumViews, ppRenderTargetViews, pDepthStencilView);
+}
+
+void WINAPI hk_ID3D11DeviceContext_RSSetViewports(ID3D11DeviceContext* This, UINT NumViewports, const D3D11_VIEWPORT* pViewports)
+{
+	if (backbufferRTV != nullptr && switchRTV && NumViewports == 1 && 
+		pViewports[0].Width == SkyrimUpscaler::GetSingleton()->mRenderSizeX &&
+		pViewports[0].Height == SkyrimUpscaler::GetSingleton()->mRenderSizeY) {
+		D3D11_VIEWPORT viewports;
+		viewports.Width = SkyrimUpscaler::GetSingleton()->mDisplaySizeX;
+		viewports.Height = SkyrimUpscaler::GetSingleton()->mDisplaySizeY;
+		viewports.TopLeftX = pViewports[0].TopLeftX;
+		viewports.TopLeftY = pViewports[0].TopLeftY;
+		viewports.MaxDepth = pViewports[0].MaxDepth;
+		viewports.MinDepth = pViewports[0].MinDepth;
+		(This->*ptrRSSetViewports)(NumViewports, &viewports);
+	} else {
+		(This->*ptrRSSetViewports)(NumViewports, pViewports);
+	}
+}
+
+
+
 HRESULT WINAPI hk_IDXGISwapChain_Present(IDXGISwapChain* This, UINT SyncInterval, UINT Flags)
 {
+	switchRTV = false;
 	// Prevents swapchain2 from actually doing present, saving performance
 	// It's needed for ENB to be informed, but not needed to do actual present
-	static int i = 0;
-	if (i++%2 == 0)
+	if (SwapChainProxy->blockPresent)
 		return 0;
 	auto hr = (This->*ptrPresent)(SyncInterval, Flags);
 	return hr;
@@ -63,7 +108,7 @@ HRESULT WINAPI hk_ID3D11Device_CreateTexture2D(ID3D11Device* This, const D3D11_T
 	} else if (pDesc->Format >= DXGI_FORMAT_R24G8_TYPELESS && pDesc->Format <= DXGI_FORMAT_X24_TYPELESS_G8_UINT) {
 		if (pDesc->Width == SkyrimUpscaler::GetSingleton()->mRenderSizeX &&
 			pDesc->Height == SkyrimUpscaler::GetSingleton()->mRenderSizeY &&
-			SkyrimUpscaler::GetSingleton()->mDepthBuffer == nullptr) {
+			SkyrimUpscaler::GetSingleton()->mDepthBuffer.mImage == nullptr) {
 			SkyrimUpscaler::GetSingleton()->SetupDepth(*ppTexture2D);
 			logger::info("Depth Buffer Found : {} x {}", pDesc->Width, pDesc->Height);
 		}
@@ -96,10 +141,10 @@ static void SetMipLodBias(ID3D11SamplerState** outSamplers, UINT StartSlot, UINT
 				passThroughSamplers.insert(orig);
 				continue;
 			}
-			if (!DRS::GetSingleton()->reset) 
+			if (DRS::GetSingleton()->IsInFullscreenMenu()) 
 				continue;
 			sd.MipLODBias = mipLodBias;
-			SkyrimUpscaler::GetSingleton()->mD3d11Device->CreateSamplerState(&sd, &mappedSamplers[orig]);
+			SkyrimUpscaler::GetSingleton()->mDevice->CreateSamplerState(&sd, &mappedSamplers[orig]);
 			passThroughSamplers.insert(mappedSamplers[orig]);
 		}
 		outSamplers[i] = mappedSamplers[orig];
@@ -229,7 +274,10 @@ HRESULT WINAPI hk_D3D11CreateDeviceAndSwapChain(
 	*(uintptr_t*)&ptrDSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_DSSetSamplers, 65);
 	*(uintptr_t*)&ptrCSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_CSSetSamplers, 70);
 
-	// Replace the reference of the original swapchain with the ENB swapChain wrapper
+	*(uintptr_t*)&ptrOMSetRenderTargets = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_OMSetRenderTargets, 33);
+	*(uintptr_t*)&ptrRSSetViewports     = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_RSSetViewports, 44);
+
+	// Replace the reference of the original swapchain with the ENB SwapChain wrapper
 	SwapChainProxy->mSwapChain2 = swapChain;
 	SwapChainProxy->usingSwapChain2 = true;
 	*ppSwapChain = SwapChainProxy;
@@ -260,31 +308,28 @@ struct UpscalerHooks
 			}
 			func(BSGraphics_Renderer, unk);
 			//SkyrimUpscaler::GetSingleton()->EvaluateUpscaler();
-			ID3D11Texture2D* back_buffer1;
-			SwapChainProxy->mSwapChain1->GetBuffer(0, IID_PPV_ARGS(&back_buffer1));
-			ID3D11Texture2D* back_buffer2;
-			SwapChainProxy->mSwapChain2->GetBuffer(0, IID_PPV_ARGS(&back_buffer2));
-			SkyrimUpscaler::GetSingleton()->ForceEvaluateUpscaler(back_buffer2, back_buffer1);
-			static ID3D11RenderTargetView* backbufferRTV;
-			if (backbufferRTV == nullptr) {
-				SwapChainProxy->mDevice->CreateRenderTargetView(back_buffer2, NULL, &backbufferRTV);
-			}
+			if (!backbuffer)
+				SwapChainProxy->mSwapChain1->GetBuffer(0, IID_PPV_ARGS(&backbuffer));
+			if (!backbuffer2)
+				SwapChainProxy->mSwapChain2->GetBuffer(0, IID_PPV_ARGS(&backbuffer2));
+			SkyrimUpscaler::GetSingleton()->ForceEvaluateUpscaler(backbuffer2, backbuffer);
 
+			if (backbufferRTV == nullptr)
+				SwapChainProxy->mDevice->CreateRenderTargetView(backbuffer, NULL, &backbufferRTV);
+			if (backbuffer2RTV == nullptr)
+				SwapChainProxy->mDevice->CreateRenderTargetView(backbuffer2, NULL, &backbuffer2RTV);
+
+			auto motionRTV = SkyrimUpscaler::GetSingleton()->mMotionVectorsEmpty.GetRTV();
 			const FLOAT color[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-			SwapChainProxy->mContext->ClearRenderTargetView(backbufferRTV, color);
+			SwapChainProxy->mContext->ClearRenderTargetView(motionRTV, color);
 
-			//D3D11_VIEWPORT vp;
-			//memset(&vp, 0, sizeof(D3D11_VIEWPORT));
-			//vp.Width = SkyrimUpscaler::GetSingleton()->mDisplaySizeX;
-			//vp.Height = SkyrimUpscaler::GetSingleton()->mDisplaySizeY;
-			//vp.MinDepth = 0.0f;
-			//vp.MaxDepth = 1.0f;
-			//vp.TopLeftX = vp.TopLeftY = 0;
-			//context->RSSetViewports(1, &vp);
-			//hr = SwapChainProxy->mSwapChain2->Present(0, 0);
-
-			//context->CopyResource(back_buffer1, allTextures[index]);
-			//logger::info("Displaying Texture {}/{}", index, texSize);
+			// Something is odd with main menu, should be dealt with separately
+			if (!DRS::GetSingleton()->IsInFullscreenMenu()) {
+				auto DSV2 = SkyrimUpscaler::GetSingleton()->mTempDepthBuffer.GetDSV();
+				SwapChainProxy->mContext->ClearDepthStencilView(DSV2, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+				SwapChainProxy->mContext->OMSetRenderTargets(1, &backbufferRTV, DSV2);
+				switchRTV = true;
+			}
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
@@ -295,7 +340,8 @@ struct UpscalerHooks
 		{
 			func(a_state);
 			if (SkyrimUpscaler::GetSingleton()->IsEnabled() && 
-				SkyrimUpscaler::GetSingleton()->mEnableJitter) {
+				SkyrimUpscaler::GetSingleton()->mEnableJitter &&
+				!DRS::GetSingleton()->IsInFullscreenMenu()) {
 				if (SkyrimUpscaler::GetSingleton()->mUpscaleType != TAA) {
 					float x = 0.0f;
 					float y = 0.0f;
@@ -328,6 +374,61 @@ struct UpscalerHooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
+	struct BSScaleformManager_LoadMovie
+	{
+		static void thunk(RE::GFxMovieView* a_movieView, float a_deltaT, std::uint32_t a_frameCatchUpCount)
+		{
+			RE::GViewport viewDesc;
+			a_movieView->GetViewport(&viewDesc);
+			viewDesc.bufferWidth = SkyrimUpscaler::GetSingleton()->mDisplaySizeX;
+			viewDesc.bufferHeight = SkyrimUpscaler::GetSingleton()->mDisplaySizeY;
+			viewDesc.width = SkyrimUpscaler::GetSingleton()->mDisplaySizeX;
+			viewDesc.height = SkyrimUpscaler::GetSingleton()->mDisplaySizeY;
+			viewDesc.scale = 0.5f;
+			a_movieView->SetViewport(viewDesc);
+			RE::GRectF rect = a_movieView->GetSafeRect();
+			rect.right = SkyrimUpscaler::GetSingleton()->mDisplaySizeX;
+			rect.bottom = SkyrimUpscaler::GetSingleton()->mDisplaySizeY;
+			a_movieView->SetSafeRect(rect);
+			a_movieView->Advance(a_deltaT, a_frameCatchUpCount);
+		}
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct MistMenu_PostDisplay
+	{
+		static void thunk(void* a1, uint32_t a2, uint32_t a3)
+		{
+			func(a1, a2, a3);
+
+			SkyrimUpscaler::GetSingleton()->ForceEvaluateUpscaler(backbuffer2, backbuffer);
+			if (backbufferRTV == nullptr)
+				SwapChainProxy->mDevice->CreateRenderTargetView(backbuffer, NULL, &backbufferRTV);
+
+			auto DSV2 = SkyrimUpscaler::GetSingleton()->mTempDepthBuffer.GetDSV();
+			SwapChainProxy->mContext->OMSetRenderTargets(1, &backbufferRTV, DSV2);
+			switchRTV = true;
+		}
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct StatsMenu_PostDisplay
+	{
+		static void thunk(void* a1, uint32_t a2, RE::NiCamera* a3, uint32_t a4)
+		{
+			func(a1, a2, a3, a4);
+
+			SkyrimUpscaler::GetSingleton()->ForceEvaluateUpscaler(backbuffer2, backbuffer);
+			if (backbufferRTV == nullptr)
+				SwapChainProxy->mDevice->CreateRenderTargetView(backbuffer, NULL, &backbufferRTV);
+
+			auto DSV2 = SkyrimUpscaler::GetSingleton()->mTempDepthBuffer.GetDSV();
+			SwapChainProxy->mContext->OMSetRenderTargets(1, &backbufferRTV, DSV2);
+			switchRTV = true;
+		}
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
 	static void Install()
 	{
 		// Hook for getting the swapchain
@@ -346,6 +447,12 @@ struct UpscalerHooks
 		stl::write_thunk_call<BSGraphics_Renderer_Begin_UpdateJitter>(REL::RelocationID(75460, 77245).address() + REL::Relocate(0xE5, 0xE2));  // D6A0C0 (D6A1A5), DA5A00 (DA5AE2)
 		// GetClientRectHook
 		stl::write_thunk_call6<GetClientRectHook>(REL::RelocationID(75460, 77245).address() + REL::Relocate(0x192, 0x18B));  // D6A0C0 (D6A252), DA5A00 (DA5B8B)
+		// BSScaleformManager_LoadMovie
+		stl::write_thunk_call6<BSScaleformManager_LoadMovie>(REL::RelocationID(80302, 82325).address() + REL::Relocate(0x39B, 0x399));
+
+		stl::write_thunk_call<MistMenu_PostDisplay>(REL::RelocationID(51855, 52727).address() + REL::Relocate(0x7A1, 0x7A4));      // 8D2390 (8D2B31), 9017E0 (901F84)
+		//stl::write_thunk_call<StatsMenu_PostDisplay>(REL::RelocationID(51639, 52511).address() + REL::Relocate(0x1B, 0x1B));   // 8C07F0 (8C080B), 8EFEE0 (8EFEFB) 
+
 		// Always enable TAA jitters, even without TAA
 		static REL::Relocation<uintptr_t> updateJitterHook{ REL::RelocationID(75709, 77518) };          // D7CFB0, DB96E0
 		static REL::Relocation<uintptr_t> buildCameraStateDataHook{ REL::RelocationID(75711, 77520) };  // D7D130, DB9850

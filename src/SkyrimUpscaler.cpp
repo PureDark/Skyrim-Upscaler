@@ -71,8 +71,8 @@ void SkyrimUpscaler::MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 void SkyrimUpscaler::SetupSwapChain(IDXGISwapChain* swapchain)
 {
 	mSwapChain = swapchain;
-	mSwapChain->GetDevice(IID_PPV_ARGS(&mD3d11Device));
-	SetupDirectX(mD3d11Device, 0);
+	mSwapChain->GetDevice(IID_PPV_ARGS(&mDevice));
+	SetupDirectX(mDevice, 0);
 }
 
 float SkyrimUpscaler::GetVerticalFOVRad()
@@ -93,20 +93,20 @@ void SkyrimUpscaler::EvaluateUpscaler()
 	if (mSwapChain != nullptr) {
 		ID3D11Texture2D* back_buffer;
 		mSwapChain->GetBuffer(0, IID_PPV_ARGS(&back_buffer));
-		if (back_buffer != nullptr && mDepthBuffer != nullptr && mMotionVectors != nullptr) {
-			ID3D11Texture2D* motionVectorTex = (RE::UI::GetSingleton()->GameIsPaused() ? mMotionVectorsEmpty : mMotionVectors);
+		if (back_buffer != nullptr && mDepthBuffer.mImage != nullptr && mMotionVectors.mImage != nullptr) {
+			ID3D11Texture2D* motionVectorTex = (RE::UI::GetSingleton()->GameIsPaused() ? mMotionVectorsEmpty.mImage : mMotionVectors.mImage);
 			bool             enable = IsEnabled();
 			bool             delayOneFrame = (lastEnable && !enable);
 			bool             TAAEnabled = (mUpscaleType == TAA);
 			if (((IsEnabled() && !DRS::GetSingleton()->reset) || delayOneFrame) && !TAAEnabled) {
 				lastEnable = enable;
 				ID3D11DeviceContext* context;
-				mD3d11Device->GetImmediateContext(&context);
+				mDevice->GetImmediateContext(&context);
 				// For DLSS to work in borderless mode we must copy the backbuffer to a temporary texture
-				context->CopyResource(mTempColor, back_buffer);
+				context->CopyResource(mTempColor.mImage, back_buffer);
 				int j = (mEnableJitter) ? 1 : 0;
 				if (!mDisableResultCopying) {
-					SimpleEvaluate(0, mTempColor, motionVectorTex, mDepthBuffer, nullptr, back_buffer, mRenderSizeX, mRenderSizeY, mSharpness, 
+					SimpleEvaluate(0, mTempColor.mImage, motionVectorTex, mDepthBuffer.mImage, nullptr, back_buffer, mRenderSizeX, mRenderSizeY, mSharpness, 
 						mJitterOffsets[0] * j, mJitterOffsets[1] * j, mMotionScale[0], mMotionScale[1], false, g_fNear / 100, g_fFar / 100, GetVerticalFOVRad());
 				}
 			}
@@ -120,14 +120,14 @@ void SkyrimUpscaler::ForceEvaluateUpscaler(ID3D11Texture2D* color, ID3D11Texture
 	static float&      g_fFar = (*(float*)(RELOCATION_ID(517032, 403540).address() + 0x44));   // 2F26FC4, 2FC1A94
 	static bool        lastEnable = false;
 
-	if (mDepthBuffer != nullptr && mMotionVectors != nullptr) {
-		ID3D11Texture2D* motionVectorTex = (RE::UI::GetSingleton()->GameIsPaused() ? mMotionVectorsEmpty : mMotionVectors);
+	if (mDepthBuffer.mImage != nullptr && mMotionVectors.mImage != nullptr) {
+		ID3D11Texture2D*     motionVectorTex = (RE::UI::GetSingleton()->GameIsPaused() ? mMotionVectorsEmpty.mImage : mMotionVectors.mImage);
 		ID3D11DeviceContext* context;
-		mD3d11Device->GetImmediateContext(&context);
+		mDevice->GetImmediateContext(&context);
 		if (!mDisableResultCopying) {
-			SimpleEvaluate(0, color, motionVectorTex, mDepthBuffer, nullptr, dest, mRenderSizeX, mRenderSizeY, mSharpness,
+			SimpleEvaluate(0, color, motionVectorTex, mDepthBuffer.mImage, nullptr, dest, mRenderSizeX, mRenderSizeY, mSharpness,
 				mJitterOffsets[0], mJitterOffsets[1], mMotionScale[0], mMotionScale[1], false, g_fNear / 100, g_fFar / 100, GetVerticalFOVRad());
-			context->CopyResource(mMotionVectors, mMotionVectorsEmpty);
+			context->CopyResource(mMotionVectors.mImage, mMotionVectorsEmpty.mImage);
 		}
 	}
 }
@@ -178,16 +178,23 @@ void SkyrimUpscaler::SetEnabled(bool enabled)
 
 void SkyrimUpscaler::SetupDepth(ID3D11Texture2D* depth_buffer)
 {
-	mDepthBuffer = depth_buffer;
+	mDepthBuffer.mImage = depth_buffer;
+	if (!mTempDepthBuffer.mImage) {
+		D3D11_TEXTURE2D_DESC desc;
+		depth_buffer->GetDesc(&desc);
+		desc.Width = mDisplaySizeX;
+		desc.Height = mDisplaySizeY;
+		mDevice->CreateTexture2D(&desc, NULL, &mTempDepthBuffer.mImage);
+	}
 }
 
 void SkyrimUpscaler::SetupMotionVector(ID3D11Texture2D* motion_buffer)
 {
-	mMotionVectors = motion_buffer;
-	if (!mMotionVectorsEmpty) {
+	mMotionVectors.mImage = motion_buffer;
+	if (!mMotionVectorsEmpty.mImage) {
 		D3D11_TEXTURE2D_DESC desc;
 		motion_buffer->GetDesc(&desc);
-		mD3d11Device->CreateTexture2D(&desc, NULL, &mMotionVectorsEmpty);
+		mDevice->CreateTexture2D(&desc, NULL, &mMotionVectorsEmpty.mImage);
 	}
 }
 
@@ -211,13 +218,18 @@ void SkyrimUpscaler::InitUpscaler()
 	mDisplaySizeY = desc.Height;
 	if (mUpscaleType != TAA) {
 		int upscaleType = (mUpscaleType == DLAA) ? DLSS : mUpscaleType;
-		mOutColor = (ID3D11Texture2D*)SimpleInit(0, upscaleType, mQualityLevel, mDisplaySizeX, mDisplaySizeY, false, false, false, false, mSharpening, true, desc.Format);
-		if (mOutColor == nullptr) {
+		mOutColor.mImage = (ID3D11Texture2D*)SimpleInit(0, upscaleType, mQualityLevel, mDisplaySizeX, mDisplaySizeY, false, false, false, false, mSharpening, true, desc.Format);
+		if (mOutColor.mImage == nullptr) {
 			SetEnabled(false);
 			return;
 		}
-		if (!mTempColor)
-			mD3d11Device->CreateTexture2D(&desc, NULL, &mTempColor);
+		if (!mTempColor.mImage)
+			mDevice->CreateTexture2D(&desc, NULL, &mTempColor.mImage);
+		if (!mUITexture.mImage) {
+			desc.Width = mRenderSizeX;
+			desc.Height = mRenderSizeY;
+			mDevice->CreateTexture2D(&desc, NULL, &mUITexture.mImage);
+		}
 		if (mUpscaleType == DLAA) {
 			mRenderSizeX = mDisplaySizeX;
 			mRenderSizeY = mDisplaySizeY;

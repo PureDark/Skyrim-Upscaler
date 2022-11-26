@@ -36,6 +36,13 @@ public:
 	float targetScaleFactor = 1.0f;
 	float currentScaleFactor = 1.0f;
 	bool  reset = false;
+	bool  isInMainMenu = true;
+	bool  isInLoadingMenu = true;
+	bool  isInStatsMenu = true;
+	bool  isInMagicMenu = true;
+	bool  isInMapMenu = true;
+
+	bool IsInFullscreenMenu();
 
 	void Update();
 	void ControlResolution();

@@ -17,6 +17,7 @@ public:
 	ID3D11SamplerState*    mSampler{ nullptr };
 	ID3D11RasterizerState* mRasterizerState{ nullptr };
 	ID3D11BlendState*      mBlendState{ nullptr };
+	bool                   blockPresent{ false };
 
 	DXGISwapChainProxy(IDXGISwapChain* swapChain);
 

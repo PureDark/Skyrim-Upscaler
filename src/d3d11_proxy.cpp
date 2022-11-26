@@ -5,8 +5,12 @@
 #include <SkyrimUpscaler.h>
 #include <d3dcompiler.h>
 #include <hlsl/flip.vs.inc>
+#include <hlsl/flip.ps.inc>
 #include <hlsl/xbr_ps.inc>
 #include <hlsl/xbr_edge_ps.inc>
+#include <ScreenGrab11.h>
+#include <imgui.h>
+#include <wincodec.h>
 
 DXGISwapChainProxy::DXGISwapChainProxy(IDXGISwapChain* swapChain)
 {
@@ -78,27 +82,24 @@ HRESULT STDMETHODCALLTYPE DXGISwapChainProxy::Present(UINT SyncInterval, UINT Fl
 	ID3D11Texture2D* back_buffer2;
 	mSwapChain2->GetBuffer(0, IID_PPV_ARGS(&back_buffer2));
 	// Call Present to inform ENB, but we intercept it to not do actual present
+	blockPresent = true;
 	hr = mSwapChain2->Present(SyncInterval, Flags);
+	blockPresent = false;
 
-	static ID3D11RenderTargetView* backBufferView = nullptr;
-	if (backBufferView == nullptr)
-		mDevice->CreateRenderTargetView(back_buffer1, NULL, &backBufferView);
+	//if (!SkyrimUpscaler::GetSingleton()->IsEnabled()) {
+	static ID3D11RenderTargetView* backBuffer2View = nullptr;
+	if (backBuffer2View == nullptr)
+		mDevice->CreateRenderTargetView(back_buffer2, NULL, &backBuffer2View);
 
-	static ID3D11RenderTargetView* tempColorRTV = nullptr;
-	if (tempColorRTV == nullptr)
-		mDevice->CreateRenderTargetView(SkyrimUpscaler::GetSingleton()->mTempColor, NULL, &tempColorRTV);
+	//	auto tempColorRTV = SkyrimUpscaler::GetSingleton()->mTempColor.GetRTV();
+	//	auto tempColorSRV = SkyrimUpscaler::GetSingleton()->mTempColor.GetSRV();
+	//	auto UISRV = SkyrimUpscaler::GetSingleton()->mUITexture.GetSRV();
 
-	static ID3D11ShaderResourceView* tempColorSRV = nullptr;
-	if (tempColorSRV == nullptr)
-		mDevice->CreateShaderResourceView(SkyrimUpscaler::GetSingleton()->mTempColor, NULL, &tempColorSRV);
-
-	static ID3D11ShaderResourceView* shaderResourceView = nullptr;
-	if (shaderResourceView == nullptr)
-		mDevice->CreateShaderResourceView(back_buffer2, NULL, &shaderResourceView);
 	const FLOAT color[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-	mContext->ClearRenderTargetView(tempColorRTV, color);
-	RenderTexture(shaderResourceView, tempColorRTV, SkyrimUpscaler::GetSingleton()->mDisplaySizeX, SkyrimUpscaler::GetSingleton()->mDisplaySizeY);
-	RenderTexture(shaderResourceView, backBufferView, SkyrimUpscaler::GetSingleton()->mDisplaySizeX, SkyrimUpscaler::GetSingleton()->mDisplaySizeY, tempColorSRV);
+	mContext->ClearRenderTargetView(backBuffer2View, color);
+	//	RenderTexture(UISRV, tempColorRTV, SkyrimUpscaler::GetSingleton()->mDisplaySizeX, SkyrimUpscaler::GetSingleton()->mDisplaySizeY);
+	//	RenderTexture(UISRV, backBufferView, SkyrimUpscaler::GetSingleton()->mDisplaySizeX, SkyrimUpscaler::GetSingleton()->mDisplaySizeY, tempColorSRV);
+	//}
 
 	hr = mSwapChain1->Present(SyncInterval, Flags);
 	return hr;
@@ -154,7 +155,7 @@ HRESULT STDMETHODCALLTYPE DXGISwapChainProxy::GetLastPresentCount(_Out_ UINT* pL
 void DXGISwapChainProxy::InitShader()
 {
 	mDevice->CreateVertexShader(VS_Flip, sizeof(VS_Flip), nullptr, &mVertexShader);
-	mDevice->CreatePixelShader(PS_EDGE_XBR, sizeof(PS_EDGE_XBR), nullptr, &mPixelShader);
+	mDevice->CreatePixelShader(PS_Flip, sizeof(PS_Flip), nullptr, &mPixelShader);
 	mDevice->CreatePixelShader(PS_XBR, sizeof(PS_XBR), nullptr, &mPixelShader2);
 
 	D3D11_SAMPLER_DESC sd;
