@@ -23,7 +23,6 @@ void Init()
 	SKSE::GetMessagingInterface()->RegisterListener(MessageHandler);
 	DRS::InstallHooks();
 	InstallUpscalerHooks();
-	MenuOpenCloseEventHandler::Register();
 }
 
 void InitializeLog()

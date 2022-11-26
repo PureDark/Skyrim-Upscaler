@@ -91,6 +91,12 @@ RE::BSEventNotifyControl MenuOpenCloseEventHandler::ProcessEvent(const RE::MenuO
 		} else {
 			DRS::GetSingleton()->isInStatsMenu = false;
 		}
+	} else if (a_event->menuName == RE::MapMenu::MENU_NAME) {
+		if (a_event->opening) {
+			DRS::GetSingleton()->isInMapMenu = true;
+		} else {
+			DRS::GetSingleton()->isInMapMenu = false;
+		}
 	}
 
 	return RE::BSEventNotifyControl::kContinue;

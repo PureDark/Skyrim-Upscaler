@@ -86,3 +86,18 @@ namespace util
 #define DLLEXPORT __declspec(dllexport)
 
 #include "Plugin.h"
+
+struct MenuScreenData
+{
+	uint32_t unk00;         // 00
+	float    mouseX;        // 04
+	float    mouseY;        // 08
+	uint32_t unk0C;         // 0C
+	uint32_t unk10;         // 10
+	float    screenWidth;   // 14
+	float    screenHeight;  // 18
+	uint32_t unk1C;         // 1C
+	uint64_t unk20;         // 20
+	uint64_t unk28;         // 28
+};
+static_assert(sizeof(MenuScreenData) == 0x30);
