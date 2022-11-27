@@ -94,7 +94,7 @@ static void SetMipLodBias(ID3D11SamplerState** outSamplers, UINT StartSlot, UINT
 			}
 			sd.MipLODBias = mipLodBias;
 
-			SkyrimUpscaler::GetSingleton()->mD3d11Device->CreateSamplerState(&sd, &mappedSamplers[orig]);
+			SkyrimUpscaler::GetSingleton()->mDevice->CreateSamplerState(&sd, &mappedSamplers[orig]);
 			passThroughSamplers.insert(mappedSamplers[orig]);
 		}
 		outSamplers[i] = mappedSamplers[orig];
