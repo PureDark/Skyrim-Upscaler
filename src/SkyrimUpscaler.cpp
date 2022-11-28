@@ -218,6 +218,9 @@ void SkyrimUpscaler::InitUpscaler()
 	mDisplaySizeY = desc.Height;
 	if (mUpscaleType != TAA) {
 		int upscaleType = (mUpscaleType == DLAA) ? DLSS : mUpscaleType;
+		// These two run on DX12, need to make sure the job of last frame is done before reinitializing
+		if (upscaleType == FSR2 || upscaleType == XESS)
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 		mOutColor.mImage = (ID3D11Texture2D*)SimpleInit(0, upscaleType, mQualityLevel, mDisplaySizeX, mDisplaySizeY, false, false, false, false, mSharpening, true, desc.Format);
 		if (mOutColor.mImage == nullptr) {
 			SetEnabled(false);
@@ -225,11 +228,6 @@ void SkyrimUpscaler::InitUpscaler()
 		}
 		if (!mTempColor.mImage)
 			mDevice->CreateTexture2D(&desc, NULL, &mTempColor.mImage);
-		if (!mUITexture.mImage) {
-			desc.Width = mRenderSizeX;
-			desc.Height = mRenderSizeY;
-			mDevice->CreateTexture2D(&desc, NULL, &mUITexture.mImage);
-		}
 		if (mUpscaleType == DLAA) {
 			mRenderSizeX = mDisplaySizeX;
 			mRenderSizeY = mDisplaySizeY;

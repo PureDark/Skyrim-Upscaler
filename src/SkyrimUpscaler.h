@@ -126,7 +126,6 @@ public:
 	ImageWrapper     mDepthBuffer;
 	ImageWrapper     mTempDepthBuffer;
 	ImageWrapper     mMotionVectors;
-	ImageWrapper     mUITexture;
 	IDXGISwapChain*  mSwapChain{ nullptr };
 	ID3D11Device*    mDevice{ nullptr };
 
