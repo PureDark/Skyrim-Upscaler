@@ -73,22 +73,30 @@ public:
 		}
 		return mSRV;
 	}
-	ID3D11DepthStencilView* GetDSV(D3D11_DEPTH_STENCIL_VIEW_DESC pDesc)
+	ID3D11DepthStencilView* GetDSV()
 	{
 		if (mImage != nullptr && mDSV == nullptr) {
 			ID3D11Device* device;
 			mImage->GetDevice(&device);
-			device->CreateDepthStencilView(mImage, &pDesc, &mDSV);
+			D3D11_DEPTH_STENCIL_VIEW_DESC desc;
+			desc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+			desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+			desc.Flags = 0;
+			desc.Texture2D.MipSlice = 0;
+			device->CreateDepthStencilView(mImage, &desc, &mDSV);
 		}
 		return mDSV;
 	}
-	void Release() {
-		if (mImage)
-			mImage->Release();
+	void Release()
+	{
 		if (mRTV)
 			mRTV->Release();
 		if (mSRV)
 			mSRV->Release();
+		if (mDSV)
+			mDSV->Release();
+		if (mImage)
+			mImage->Release();
 	}
 };
 
@@ -115,13 +123,15 @@ public:
 	bool mDisableResultCopying{ false };
 	bool mUseOptimalMipLodBias{ true };
 
-	ImageWrapper     mTempColor;
-	ImageWrapper     mOutColor;
-	ImageWrapper     mMotionVectorsEmpty;
-	ImageWrapper     mDepthBuffer;
-	ImageWrapper     mMotionVectors;
-	IDXGISwapChain*  mSwapChain{ nullptr };
-	ID3D11Device*    mDevice{ nullptr };
+	ImageWrapper         mTempColor;
+	ImageWrapper         mTargetTex;
+	ImageWrapper         mOutColor;
+	ImageWrapper         mMotionVectorsEmpty;
+	ImageWrapper         mDepthBuffer;
+	ImageWrapper         mMotionVectors;
+	IDXGISwapChain*      mSwapChain{ nullptr };
+	ID3D11Device*        mDevice{ nullptr };
+	ID3D11DeviceContext* mContext{ nullptr };
 
 	~SkyrimUpscaler() {}
 
@@ -138,16 +148,17 @@ public:
 	void MessageHandler(SKSE::MessagingInterface::Message* a_msg);
 
 	float GetVerticalFOVRad();
-	void  EvaluateUpscaler();
+	void  EvaluateUpscaler(ID3D11Texture2D* source = nullptr);
 
 	bool IsEnabled();
 
 	void GetJitters(float* out_x, float* out_y);
 	void SetJitterOffsets(float x, float y);
 
+	void SetupTarget(ID3D11Texture2D* target_buffer);
 	void SetMotionScale(float x, float y);
-	void SetEnabled(bool enabled);
 	void SetupDepth(ID3D11Texture2D* depth_buffer);
+	void SetEnabled(bool enabled);
 	void SetupMotionVector(ID3D11Texture2D* motion_buffer);
 	void PreInit();
 	void InitUpscaler();

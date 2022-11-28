@@ -2,7 +2,6 @@
 /***************SKSE PLUGIN***************/
 
 #include "Plugin.h"
-#include <ENB/ENBSeriesAPI.h>
 #include <DRS.h>
 #include <SkyrimUpscaler.h>
 
@@ -10,8 +9,10 @@ static void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 {
 	switch (a_msg->type) {
 	case SKSE::MessagingInterface::kDataLoaded:
-		RE::BSInputDeviceManager::GetSingleton()->AddEventSink(InputListener::GetSingleton());
-		logger::info("Input listener registered");
+		if (!REL::Module::IsVR()) {
+			RE::BSInputDeviceManager::GetSingleton()->AddEventSink(InputListener::GetSingleton());
+			logger::info("Input listener registered");
+		}
 		break;
 	}
 	DRS::GetSingleton()->MessageHandler(a_msg);
@@ -23,7 +24,6 @@ void Init()
 	SKSE::GetMessagingInterface()->RegisterListener(MessageHandler);
 	DRS::InstallHooks();
 	InstallUpscalerHooks();
-	MenuOpenCloseEventHandler::Register();
 }
 
 void InitializeLog()

@@ -15,6 +15,22 @@ void DRS::GetGameSettings()
 	}
 }
 
+void DRS::SetDRSVR(float renderScale)
+{
+	if (renderScale == 0)
+		renderScale = currentScaleFactor;
+	auto scriptFactory = RE::IFormFactory::GetConcreteFormFactoryByType<RE::Script>();
+	auto script = scriptFactory->Create();
+	char schar[512];
+	sprintf_s(schar, "dr width %f", renderScale);
+	script->SetCommand(schar);
+	script->CompileAndRun(nullptr);
+	sprintf_s(schar, "dr height %f", renderScale);
+	script->SetCommand(schar);
+	script->CompileAndRun(nullptr);
+	delete script;
+}
+
 void DRS::Update()
 {
 	if (reset) {
@@ -38,9 +54,13 @@ void DRS::ResetScale()
 
 void DRS::SetDRS(BSGraphics::State* a_state)
 {
+	if (lastScaleFactor != currentScaleFactor && REL::Module::IsVR()) {
+		SetDRSVR(currentScaleFactor);
+	}
 	auto& runtimeData = a_state->GetRuntimeData();
 	runtimeData.fDynamicResolutionCurrentHeightScale = currentScaleFactor;
 	runtimeData.fDynamicResolutionCurrentWidthScale = currentScaleFactor;
+	lastScaleFactor = currentScaleFactor;
 }
 
 void DRS::MessageHandler(SKSE::MessagingInterface::Message* a_msg)
@@ -59,7 +79,8 @@ void DRS::MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 
 RE::BSEventNotifyControl MenuOpenCloseEventHandler::ProcessEvent(const RE::MenuOpenCloseEvent* a_event, RE::BSTEventSource<RE::MenuOpenCloseEvent>*)
 {
-	if (a_event->menuName == RE::LoadingMenu::MENU_NAME ||
+	if (a_event->menuName == RE::MainMenu::MENU_NAME ||
+		a_event->menuName == RE::LoadingMenu::MENU_NAME ||
 		a_event->menuName == RE::RaceSexMenu::MENU_NAME) {
 		if (a_event->opening) {
 			DRS::GetSingleton()->reset = true;
@@ -67,6 +88,7 @@ RE::BSEventNotifyControl MenuOpenCloseEventHandler::ProcessEvent(const RE::MenuO
 		} else {
 			DRS::GetSingleton()->reset = false;
 			DRS::GetSingleton()->ControlResolution();
+			DRS::GetSingleton()->SetDRSVR(DRS::GetSingleton()->currentScaleFactor);
 		}
 	}
 	else if (a_event->menuName == RE::FaderMenu::MENU_NAME) {

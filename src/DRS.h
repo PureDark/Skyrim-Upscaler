@@ -34,6 +34,7 @@ public:
 	// Variables
 
 	float targetScaleFactor = 1.0f;
+	float lastScaleFactor = 1.0f;
 	float currentScaleFactor = 1.0f;
 	bool  reset = false;
 
@@ -42,6 +43,7 @@ public:
 	void ResetScale();
 
 	void SetDRS(BSGraphics::State* a_state);
+	void SetDRSVR(float renderScale = 0);
 
 	void MessageHandler(SKSE::MessagingInterface::Message* a_msg);
 

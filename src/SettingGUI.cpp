@@ -30,6 +30,8 @@ static inline const char* format_to_string(DXGI_FORMAT format)
 	}
 }
 
+void ProcessEvent(ImGuiKey key);
+
 void SettingGUI::InitIMGUI(IDXGISwapChain* swapchain, ID3D11Device* device, ID3D11DeviceContext* context)
 {
 	mSwapChain = swapchain;
@@ -61,12 +63,15 @@ void SettingGUI::InitIMGUI(IDXGISwapChain* swapchain, ID3D11Device* device, ID3D
 			reinterpret_cast<LONG_PTR>(WndProcHook::thunk)));
 	if (!WndProcHook::func)
 		logger::error("SetWindowLongPtrA failed!");
+	else
+		logger::info("SettingGUI::InitIMGUI Success!");
 }
 
 void SettingGUI::OnRender()
 {
-	// Our state
-	ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+	if (REL::Module::IsVR()) {
+		ProcessEvent(mToggleHotkey);
+	}
 	
 	if (ImGui::IsKeyReleased(mToggleHotkey))
 		toggle();
@@ -79,12 +84,14 @@ void SettingGUI::OnRender()
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
 
-	static bool lastShowGUI = false;
-	if (mShowGUI != lastShowGUI) {
-		auto controlMap = RE::ControlMap::GetSingleton();
-		if (controlMap)
-			controlMap->ignoreKeyboardMouse = mShowGUI;
-		lastShowGUI = mShowGUI;
+	if (!REL::Module::IsVR()) {
+		static bool lastShowGUI = false;
+		if (mShowGUI != lastShowGUI) {
+			auto controlMap = RE::ControlMap::GetSingleton();
+			if (controlMap)
+				controlMap->ignoreKeyboardMouse = mShowGUI;
+			lastShowGUI = mShowGUI;
+		}
 	}
 
 	if (mShowGUI) {
@@ -262,7 +269,7 @@ RE::BSEventNotifyControl InputListener::ProcessEvent(RE::InputEvent* const* a_ev
 				}
 				break;
 			case RE::INPUT_DEVICE::kKeyboard:
-				io.AddKeyEvent(ImGui_ImplWin32_VirtualKeyToImGuiKey(key), button->IsPressed());
+				io.AddKeyEvent(VirtualKeyToImGuiKey(key), button->IsPressed());
 				break;
 			case RE::INPUT_DEVICE::kGamepad:
 				// not implemented yet
@@ -275,4 +282,29 @@ RE::BSEventNotifyControl InputListener::ProcessEvent(RE::InputEvent* const* a_ev
 	}
 
 	return RE::BSEventNotifyControl::kContinue;
+}
+
+void ProcessEvent(ImGuiKey key)
+{
+	auto& io = ImGui::GetIO();
+	static bool leftButton = false;
+	if (GetAsyncKeyState(VK_LBUTTON) < 0 && leftButton == false) {
+		leftButton = true;
+		io.AddMouseButtonEvent(0, leftButton);
+	}
+	if (GetAsyncKeyState(VK_LBUTTON) == 0 && leftButton == true) {
+		leftButton = false;
+		io.AddMouseButtonEvent(0, leftButton);
+	}
+
+	auto vkey = ImGuiKeyToVirtualKey(key);
+
+	static bool pressed = false;
+	if (GetAsyncKeyState(vkey) < 0 && pressed == false) {
+		pressed = true;
+	}
+	if (GetAsyncKeyState(vkey) == 0 && pressed == true) {
+		pressed = false;
+		SettingGUI::GetSingleton()->toggle();
+	}
 }

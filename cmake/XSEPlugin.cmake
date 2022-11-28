@@ -72,6 +72,7 @@ target_include_directories(
 		${CMAKE_CURRENT_BINARY_DIR}/cmake
 		${CMAKE_CURRENT_SOURCE_DIR}/src
 		${SIMPLEINI_INCLUDE_DIRS}
+		${CMAKE_CURRENT_SOURCE_DIR}/extern/openvr/headers
 )
 
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
@@ -156,6 +157,8 @@ if (BUILD_SKYRIM)
 			optimized ${CMAKE_CURRENT_SOURCE_DIR}/extern/detours/x64/Release/detours.lib
 			debug ${CMAKE_CURRENT_SOURCE_DIR}/extern/PDPerfPlugin.lib
 			optimized ${CMAKE_CURRENT_SOURCE_DIR}/extern/PDPerfPlugin.lib
+			debug ${CMAKE_CURRENT_SOURCE_DIR}/extern/openvr/lib/win64/openvr_api.lib
+			optimized ${CMAKE_CURRENT_SOURCE_DIR}/extern/openvr/lib/win64/openvr_api.lib
 	)
 else()
 	add_subdirectory(${CommonLibPath} ${CommonLibName} EXCLUDE_FROM_ALL)
