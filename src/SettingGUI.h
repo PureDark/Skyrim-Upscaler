@@ -21,7 +21,7 @@ public:
 	//Reserve the second value for VR
 	IDXGISwapChain*          mSwapChain;
 	ID3D11Device*            mDevice;
-	bool                     mShowGUI{true};
+	bool                     mShowGUI{false};
 	std::vector<motion_item> sorted_item_list;
 	motion_item              selected_item;
 	int                      mToggleHotkey{ ImGuiKey_End };

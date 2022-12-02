@@ -19,16 +19,14 @@ void DRS::SetDRSVR(float renderScale)
 {
 	if (renderScale == 0)
 		renderScale = currentScaleFactor;
-	auto scriptFactory = RE::IFormFactory::GetConcreteFormFactoryByType<RE::Script>();
-	auto script = scriptFactory->Create();
-	char schar[512];
-	sprintf_s(schar, "dr width %f", renderScale);
-	script->SetCommand(schar);
-	script->CompileAndRun(nullptr);
-	sprintf_s(schar, "dr height %f", renderScale);
-	script->SetCommand(schar);
-	script->CompileAndRun(nullptr);
-	delete script;
+	auto currentWidthRatio = reinterpret_cast<float*>(REL::Offset(0x3186d14).address());
+	auto currentHeightRatio = reinterpret_cast<float*>(REL::Offset(0x3186d18).address());
+	auto previousWidthRatio = reinterpret_cast<float*>(REL::Offset(0x3186d1c).address());
+	auto previousHeightRatio = reinterpret_cast<float*>(REL::Offset(0x3186d20).address());
+	*previousWidthRatio = *currentWidthRatio;
+	*previousHeightRatio = *currentHeightRatio;
+	*currentWidthRatio = renderScale;
+	*currentHeightRatio = renderScale;
 }
 
 void DRS::Update()
@@ -54,7 +52,7 @@ void DRS::ResetScale()
 
 void DRS::SetDRS(BSGraphics::State* a_state)
 {
-	if (lastScaleFactor != currentScaleFactor && REL::Module::IsVR()) {
+	if (REL::Module::IsVR()) {
 		SetDRSVR(currentScaleFactor);
 	}
 	auto& runtimeData = a_state->GetRuntimeData();
@@ -88,7 +86,6 @@ RE::BSEventNotifyControl MenuOpenCloseEventHandler::ProcessEvent(const RE::MenuO
 		} else {
 			DRS::GetSingleton()->reset = false;
 			DRS::GetSingleton()->ControlResolution();
-			DRS::GetSingleton()->SetDRSVR(DRS::GetSingleton()->currentScaleFactor);
 		}
 	}
 	else if (a_event->menuName == RE::FaderMenu::MENU_NAME) {

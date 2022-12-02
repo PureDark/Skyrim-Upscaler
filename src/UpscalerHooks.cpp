@@ -8,9 +8,6 @@
 
 #include <Detours.h>
 #include "DRS.h"
-#include <ScreenGrab11.h>
-#include <wincodec.h>
-#include <openvr.h>
 
 static float                                                        mipLodBias = 0;
 static std::unordered_set<ID3D11SamplerState*>                      passThroughSamplers;
@@ -30,30 +27,12 @@ decltype(&ID3D11DeviceContext::GSSetSamplers) ptrGSSetSamplers;
 decltype(&ID3D11DeviceContext::HSSetSamplers) ptrHSSetSamplers;
 decltype(&ID3D11DeviceContext::DSSetSamplers) ptrDSSetSamplers;
 decltype(&ID3D11DeviceContext::CSSetSamplers) ptrCSSetSamplers;
-decltype(&vr::IVRCompositor::Submit)          ptrSubmit;
-
-decltype(&ID3D11DeviceContext::OMSetRenderTargetsAndUnorderedAccessViews) ptrOMSetRenderTargetsAndUnorderedAccessViews;
-
-static bool flagSkipDrawCall = false;
 
 static void MyLog(char* message, int size)
 {
 	logger::info("{}", message);
 }
 
-void WINAPI hk_ID3D11DeviceContext_OMSetRenderTargetsAndUnorderedAccessViews(ID3D11DeviceContext* This, UINT NumRTVs, ID3D11RenderTargetView* const* ppRenderTargetViews, ID3D11DepthStencilView* pDepthStencilView,
-	UINT UAVStartSlot, UINT NumUAVs, ID3D11UnorderedAccessView* const* ppUnorderedAccessViews, const UINT* pUAVInitialCounts)
-{
-	if (flagSkipDrawCall) {
-		flagSkipDrawCall = false;
-		(This->*ptrOMSetRenderTargetsAndUnorderedAccessViews)(0, nullptr, nullptr, UAVStartSlot, NumUAVs, ppUnorderedAccessViews, pUAVInitialCounts);
-		ID3D11Resource* dest;
-		(*ppRenderTargetViews)->GetResource(&dest);
-		SkyrimUpscaler::GetSingleton()->mContext->CopyResource(dest, SkyrimUpscaler::GetSingleton()->mTargetTex.mImage);
-		return;
-	}
-	(This->*ptrOMSetRenderTargetsAndUnorderedAccessViews)(NumRTVs, ppRenderTargetViews, pDepthStencilView, UAVStartSlot, NumUAVs, ppUnorderedAccessViews, pUAVInitialCounts);
-}
 
 HRESULT WINAPI hk_IDXGISwapChain_Present(IDXGISwapChain* This, UINT SyncInterval, UINT Flags)
 {
@@ -66,8 +45,8 @@ HRESULT WINAPI hk_IDXGISwapChain_Present(IDXGISwapChain* This, UINT SyncInterval
 HRESULT WINAPI hk_ID3D11Device_CreateTexture2D(ID3D11Device* This, const D3D11_TEXTURE2D_DESC* pDesc, const D3D11_SUBRESOURCE_DATA* pInitialData, ID3D11Texture2D** ppTexture2D)
 {
 	auto hr = (This->*ptrCreateTexture2D)(pDesc, pInitialData, ppTexture2D);
-	static bool creating = false;
-	if (creating)
+	static bool locking = false;
+	if (locking)
 		return hr;
 	if (pDesc->Format == DXGI_FORMAT_R16G16_FLOAT && pDesc->BindFlags == (D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET)) {
 		if (SkyrimUpscaler::GetSingleton()->mDisplaySizeX > 0) {
@@ -80,9 +59,9 @@ HRESULT WINAPI hk_ID3D11Device_CreateTexture2D(ID3D11Device* This, const D3D11_T
 		motion_item item = { 1u, *ppTexture2D, *pDesc };
 		SettingGUI::GetSingleton()->sorted_item_list.push_back(item);
 		SettingGUI::GetSingleton()->selected_item = item;
-		creating = true;
+		locking = true;
 		SkyrimUpscaler::GetSingleton()->SetupMotionVector(SettingGUI::GetSingleton()->selected_item.resource);
-		creating = false;
+		locking = false;
 		//SkyrimUpscaler::GetSingleton()->InitUpscaler();
 		logger::info("Motion Vertor Found : {} x {}", pDesc->Width, pDesc->Height);
 	} else if (pDesc->Format >= DXGI_FORMAT_R24G8_TYPELESS && pDesc->Format <= DXGI_FORMAT_X24_TYPELESS_G8_UINT) {
@@ -97,30 +76,39 @@ HRESULT WINAPI hk_ID3D11Device_CreateTexture2D(ID3D11Device* This, const D3D11_T
 			}
 			if (SkyrimUpscaler::GetSingleton()->mDepthBuffer.mImage != nullptr)
 				return hr;
-			creating = true;
+			locking = true;
 			SkyrimUpscaler::GetSingleton()->SetupDepth(*ppTexture2D);
-			creating = false;
+			locking = false;
 		}
-	} else if (pDesc->Format == DXGI_FORMAT_R8G8B8A8_UNORM) {
+	} else if (pDesc->Format == DXGI_FORMAT_R8G8_UNORM) {
 		if (pDesc->Width == SkyrimUpscaler::GetSingleton()->mDisplaySizeX &&
-			pDesc->Height == SkyrimUpscaler::GetSingleton()->mDisplaySizeY &&
-			pDesc->BindFlags & (D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET)) {
-			if (SkyrimUpscaler::GetSingleton()->mTargetTex.mImage == nullptr)
-				SkyrimUpscaler::GetSingleton()->SetupTarget(*ppTexture2D);
-			//logger::info("Target Buffer Found : {} x {}  {}", pDesc->Width, pDesc->Height, size);
-			targetMap[size] = *ppTexture2D;
-			size++;
-			index = size;
+			pDesc->Height == SkyrimUpscaler::GetSingleton()->mDisplaySizeY) {
+			logger::info("Transparent Buffer Found : {} x {}", pDesc->Width, pDesc->Height);
+			static int Skip = 1;
+			if (Skip > 0) {
+				Skip--;
+				return hr;
+			}
+			if (SkyrimUpscaler::GetSingleton()->mTransparentMask.mImage != nullptr)
+				return hr;
+			locking = true;
+			SkyrimUpscaler::GetSingleton()->SetupTransparentMask(*ppTexture2D);
+			locking = false;
 		}
 	} else if (pDesc->Format == DXGI_FORMAT_R11G11B10_FLOAT) {
 		if (pDesc->Width == SkyrimUpscaler::GetSingleton()->mDisplaySizeX &&
-			pDesc->Height == SkyrimUpscaler::GetSingleton()->mDisplaySizeY &&
-			pDesc->BindFlags & (D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET)) {
-			//if (SkyrimUpscaler::GetSingleton()->mTargetTex == nullptr)
-			//	SkyrimUpscaler::GetSingleton()->SetupTarget(*ppTexture2D);
-			logger::info("Target Buffer Found : {} x {}  {}", pDesc->Width, pDesc->Height, size2);
-			targetMap2[size2] = *ppTexture2D;
-			size2++;
+			pDesc->Height == SkyrimUpscaler::GetSingleton()->mDisplaySizeY) {
+			logger::info("Opaque Buffer Found : {} x {}", pDesc->Width, pDesc->Height);
+			static int Skip = 1;
+			if (Skip > 0) {
+				Skip--;
+				return hr;
+			}
+			if (SkyrimUpscaler::GetSingleton()->mOpaqueColor.mImage != nullptr)
+				return hr;
+			locking = true;
+			SkyrimUpscaler::GetSingleton()->SetupOpaqueColor(*ppTexture2D);
+			locking = false;
 		}
 	}
 	return hr;
@@ -256,47 +244,6 @@ HRESULT WINAPI hk_D3D11CreateDeviceAndSwapChain(
 	*(uintptr_t*)&ptrDSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_DSSetSamplers, 65);
 	*(uintptr_t*)&ptrCSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_CSSetSamplers, 70);
 
-	if (REL::Module::IsVR())
-		*(uintptr_t*)&ptrOMSetRenderTargetsAndUnorderedAccessViews = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_OMSetRenderTargetsAndUnorderedAccessViews, 34);
-
-	return hr;
-}
-
-vr::EVRCompositorError hk_Submit(vr::IVRCompositor* This, vr::EVREye eEye, const vr::Texture_t* pTexture, const vr::VRTextureBounds_t* pBounds = 0, vr::EVRSubmitFlags nSubmitFlags = vr::Submit_Default)
-{
-	//logger::info("eEye = {}, pTexture= {}, uv=({},{},{},{})", (int)eEye, (uint32_t)pTexture->handle, pBounds->uMin, pBounds->uMax, pBounds->vMin, pBounds->vMax);
-	static bool shift = false;
-	if (GetAsyncKeyState(VK_SHIFT) < 0 && shift == false) {
-		shift = true;
-	}
-	if (GetAsyncKeyState(VK_SHIFT) == 0 && shift == true) {
-		shift = false;
-		index--;
-		if (index < 0)
-			index = 0;
-		logger::info("Setting target buffer to {} ", index);
-	}
-	static bool ctrl = false;
-	if (GetAsyncKeyState(VK_CONTROL) < 0 && ctrl == false) {
-		ctrl = true;
-	}
-	if (GetAsyncKeyState(VK_CONTROL) == 0 && ctrl == true) {
-		ctrl = false;
-		index++;
-		if (index > size)
-			index = size;
-		logger::info("Setting target buffer to {} ", index);
-	}
-	vr::EVRCompositorError hr;
-	if (index != size) {
-		vr::Texture_t mTexture = {};
-		mTexture.eColorSpace = pTexture->eColorSpace;
-		mTexture.eType = pTexture->eType;
-		mTexture.handle = targetMap[index];
-		hr = (This->*ptrSubmit)(eEye, &mTexture, pBounds, nSubmitFlags);
-	} else {
-		hr = (This->*ptrSubmit)(eEye, pTexture, pBounds, nSubmitFlags);
-	}
 	return hr;
 }
 
@@ -308,17 +255,9 @@ struct UpscalerHooks
 		static void thunk()
 		{
 			func();
-			MenuOpenCloseEventHandler::Register();
+			if (!REL::Module::IsVR())
+				MenuOpenCloseEventHandler::Register();
 			SkyrimUpscaler::GetSingleton()->InitUpscaler();
-			//if (REL::Module::IsVR()) {
-			//	vr::HmdError       HmdErr;
-			//	vr::IVRCompositor* vrCompositor = (vr::IVRCompositor*)vr::VR_GetGenericInterface(vr::IVRCompositor_Version, &HmdErr);
-			//	if (HmdErr != 0)
-			//		logger::error("Getting IVRCompositor Failed ErrorCode: {}", HmdErr);
-			//	else
-			//		logger::info("Getting IVRCompositor Success!");
-			//	*(uintptr_t*)&ptrSubmit = Detours::X64::DetourClassVTable(*(uintptr_t*)vrCompositor, &hk_Submit, 5);
-			//}
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
@@ -327,18 +266,17 @@ struct UpscalerHooks
 	{
 		static void thunk(INT64 BSGraphics_Renderer, int unk)
 		{
-			if (SkyrimUpscaler::GetSingleton()->mTargetTex.mImage == nullptr)
-				SkyrimUpscaler::GetSingleton()->SetupTarget(targetMap[24]);
-			//static ID3D11RenderTargetView* targetRTV = nullptr;
-			//if (targetMap[24] != nullptr) {
-			//	if (targetRTV == nullptr)
-			//		SkyrimUpscaler::GetSingleton()->mDevice->CreateRenderTargetView(targetMap[24], NULL, &targetRTV);
-			//	if (targetRTV != nullptr) {
-			//		const FLOAT color[4] = { 0.0f, 0.0f, 1.0f, 1.0f };
-			//		SkyrimUpscaler::GetSingleton()->mContext->ClearRenderTargetView(targetRTV, color);
-			//	}
-			//}
 			func(BSGraphics_Renderer, unk);
+			static bool initTAA = false;
+			if (!initTAA) {
+				initTAA = true;
+				UnkOuterStruct::GetSingleton()->SetTAA(SkyrimUpscaler::GetSingleton()->mUpscaleType == TAA);
+				if (SkyrimUpscaler::GetSingleton()->mTargetTex.mImage == nullptr) {
+					ID3D11Texture2D* targetTex;
+					SkyrimUpscaler::GetSingleton()->mSwapChain->GetBuffer(0, IID_PPV_ARGS(&targetTex));
+					SkyrimUpscaler::GetSingleton()->SetupTarget(targetTex);
+				}
+			}
 			SkyrimUpscaler::GetSingleton()->EvaluateUpscaler();
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -348,26 +286,32 @@ struct UpscalerHooks
 	{
 		static void thunk(RE::BSImagespaceShader* param_1, uint64_t param_2)
 		{
-			ID3D11RenderTargetView* RTV;
-			ID3D11DepthStencilView* DSV;
-			SkyrimUpscaler::GetSingleton()->mContext->OMGetRenderTargets(1, &RTV, &DSV);
-			ID3D11Resource* renderTarget;
-			RTV->GetResource(&renderTarget);
-			ID3D11Texture2D* targetTex;
-			renderTarget->QueryInterface(IID_PPV_ARGS(&targetTex));
-			SkyrimUpscaler::GetSingleton()->SetupTarget(targetTex);
-			static bool shift = false;
-			if (GetAsyncKeyState(VK_SHIFT) < 0 && shift == false) {
-				shift = true;
+			static bool initTAA = false;
+			if (!initTAA) {
+				initTAA = true;
+				UnkOuterStruct::GetSingleton()->SetTAA(SkyrimUpscaler::GetSingleton()->mUpscaleType == TAA);
+				if (SkyrimUpscaler::GetSingleton()->mTargetTex.mImage == nullptr) {
+					ID3D11RenderTargetView* RTV;
+					ID3D11DepthStencilView* DSV;
+					SkyrimUpscaler::GetSingleton()->mContext->OMGetRenderTargets(1, &RTV, &DSV);
+					ID3D11Resource* renderTarget;
+					RTV->GetResource(&renderTarget);
+					ID3D11Texture2D* targetTex;
+					renderTarget->QueryInterface(IID_PPV_ARGS(&targetTex));
+					SkyrimUpscaler::GetSingleton()->SetupTarget(targetTex);
+				}
 			}
-			if (GetAsyncKeyState(VK_SHIFT) == 0 && shift == true) {
-				shift = false;
-				//DirectX::SaveWICTextureToFile(SkyrimUpscaler::GetSingleton()->mContext, renderTarget, GUID_ContainerFormatPng, L"TestVR.png");
-				DRS::GetSingleton()->SetDRSVR();
-			}
-			flagSkipDrawCall = true;
 			SkyrimUpscaler::GetSingleton()->EvaluateUpscaler();
 			func(param_1, param_2);
+			static ID3D11RenderTargetView* TargetRTV = nullptr;
+			static ID3D11Resource* TargetTex = nullptr;
+			if (TargetTex == nullptr) {
+				ID3D11DepthStencilView* DSV;
+				SkyrimUpscaler::GetSingleton()->mContext->OMGetRenderTargets(1, &TargetRTV, &DSV);
+				if (TargetRTV != nullptr)
+					TargetRTV->GetResource(&TargetTex);
+			}
+			SkyrimUpscaler::GetSingleton()->mContext->CopyResource(TargetTex, SkyrimUpscaler::GetSingleton()->mTargetTex.mImage);
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
 	};

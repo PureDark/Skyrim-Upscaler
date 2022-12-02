@@ -22,6 +22,9 @@ void SkyrimUpscaler::LoadINI()
 	GetSettingInt("Settings", mUpscaleType, 0);
 	GetSettingInt("Settings", mQualityLevel, 0);
 	GetSettingBool("Settings", mUseOptimalMipLodBias, true);
+	GetSettingFloat("Settings", mMipLodBias, 0);
+	GetSettingBool("Settings", mSharpening, false);
+	GetSettingFloat("Settings", mSharpness, 0);
 	mUpscaleType = std::clamp(mUpscaleType, 0, 3);
 	mQualityLevel = std::clamp(mQualityLevel, 0, 3);
 	GetSettingInt("Hotkeys", SettingGUI::GetSingleton()->mToggleHotkey, ImGuiKey_End);
@@ -44,6 +47,9 @@ void SkyrimUpscaler::SaveINI()
 	SetSettingInt("Settings", mUpscaleType);
 	SetSettingInt("Settings", mQualityLevel);
 	SetSettingBool("Settings", mUseOptimalMipLodBias);
+	SetSettingFloat("Settings", mMipLodBias);
+	SetSettingBool("Settings", mSharpening);
+	SetSettingFloat("Settings", mSharpness);
 	SetSettingInt("Hotkeys", SettingGUI::GetSingleton()->mToggleHotkey);
 }
 
@@ -94,6 +100,7 @@ void SkyrimUpscaler::EvaluateUpscaler(ID3D11Texture2D* source)
 	if (mSwapChain != nullptr) {
 		if (mTargetTex.mImage != nullptr && mDepthBuffer.mImage != nullptr && mMotionVectors.mImage != nullptr) {
 			ID3D11Texture2D* motionVectorTex = (RE::UI::GetSingleton()->GameIsPaused() ? mMotionVectorsEmpty.mImage : mMotionVectors.mImage);
+			ID3D11Texture2D* transparentMask = (mEnableTransparentMask ? mTransparentMask.mImage : nullptr);
 			bool             enable = IsEnabled();
 			bool             delayOneFrame = (lastEnable && !enable);
 			bool             TAAEnabled = (mUpscaleType == TAA);
@@ -105,7 +112,7 @@ void SkyrimUpscaler::EvaluateUpscaler(ID3D11Texture2D* source)
 				mContext->CopyResource(mTempColor.mImage, source);
 				int j = (mEnableJitter) ? 1 : 0;
 				if (!mDisableResultCopying) {
-					SimpleEvaluate(0, mTempColor.mImage, mMotionVectors.mImage, mDepthBuffer.mImage, nullptr, mTargetTex.mImage, mRenderSizeX, mRenderSizeY, mSharpness, 
+					SimpleEvaluate(0, mTempColor.mImage, motionVectorTex, mDepthBuffer.mImage, transparentMask, mTargetTex.mImage, mRenderSizeX, mRenderSizeY, mSharpness, 
 						mJitterOffsets[0] * j, mJitterOffsets[1] * j, mMotionScale[0], mMotionScale[1], false, g_fNear / 100, g_fFar / 100, GetVerticalFOVRad());
 				}
 			}
@@ -115,7 +122,7 @@ void SkyrimUpscaler::EvaluateUpscaler(ID3D11Texture2D* source)
 
 bool SkyrimUpscaler::IsEnabled()
 {
-	return mEnableUpscaler;
+	return mEnableUpscaler && !DRS::GetSingleton()->reset;
 }
 
 
@@ -165,6 +172,16 @@ void SkyrimUpscaler::SetupTarget(ID3D11Texture2D* target_buffer)
 void SkyrimUpscaler::SetupDepth(ID3D11Texture2D* depth_buffer)
 {
 	mDepthBuffer.mImage = depth_buffer;
+}
+
+void SkyrimUpscaler::SetupOpaqueColor(ID3D11Texture2D* opaque_buffer)
+{
+	mOpaqueColor.mImage = opaque_buffer;
+}
+
+void SkyrimUpscaler::SetupTransparentMask(ID3D11Texture2D* transparent_buffer)
+{
+	mTransparentMask.mImage = transparent_buffer;
 }
 
 void SkyrimUpscaler::SetupMotionVector(ID3D11Texture2D* motion_buffer)

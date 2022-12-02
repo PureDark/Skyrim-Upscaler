@@ -21,7 +21,7 @@ struct UnkOuterStruct
 
 	static UnkOuterStruct* GetSingleton()
 	{
-		REL::Relocation<UnkOuterStruct*&> instance{ RELOCATION_ID(527731, 414660) };  // 31D11A0, 326B280
+		REL::Relocation<UnkOuterStruct*&> instance{ REL::VariantID(527731, 414660, 0x34234C0) };  // 31D11A0, 326B280, 34234C0
 		return instance.get();
 	}
 
@@ -122,6 +122,7 @@ public:
 
 	bool mDisableResultCopying{ false };
 	bool mUseOptimalMipLodBias{ true };
+	bool mEnableTransparentMask{ false };
 
 	ImageWrapper         mTempColor;
 	ImageWrapper         mTargetTex;
@@ -129,6 +130,8 @@ public:
 	ImageWrapper         mMotionVectorsEmpty;
 	ImageWrapper         mDepthBuffer;
 	ImageWrapper         mMotionVectors;
+	ImageWrapper         mOpaqueColor;
+	ImageWrapper         mTransparentMask;
 	IDXGISwapChain*      mSwapChain{ nullptr };
 	ID3D11Device*        mDevice{ nullptr };
 	ID3D11DeviceContext* mContext{ nullptr };
@@ -156,10 +159,12 @@ public:
 	void SetJitterOffsets(float x, float y);
 
 	void SetupTarget(ID3D11Texture2D* target_buffer);
-	void SetMotionScale(float x, float y);
 	void SetupDepth(ID3D11Texture2D* depth_buffer);
-	void SetEnabled(bool enabled);
 	void SetupMotionVector(ID3D11Texture2D* motion_buffer);
+	void SetupOpaqueColor(ID3D11Texture2D* opaque_buffer);
+	void SetupTransparentMask(ID3D11Texture2D* transparent_buffer);
+	void SetMotionScale(float x, float y);
+	void SetEnabled(bool enabled);
 	void PreInit();
 	void InitUpscaler();
 };
