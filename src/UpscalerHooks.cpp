@@ -203,34 +203,38 @@ void WINAPI hk_ID3D11DeviceContext_CSSetSamplers(ID3D11DeviceContext* This, UINT
 HRESULT WINAPI hk_IDXGIFactory_CreateSwapChain(IDXGIFactory2* This, _In_ IUnknown* pDevice, _In_ DXGI_SWAP_CHAIN_DESC* pDesc, _COM_Outptr_ IDXGISwapChain** ppSwapChain)
 {
 	auto hr = (This->*ptrCreateSwapChain)(pDevice, pDesc, ppSwapChain);
-	SwapChainProxy = new DXGISwapChainProxy(*ppSwapChain);
+	static bool init = false;
+	if (!init) {
+		init = true;
+		SwapChainProxy = new DXGISwapChainProxy(*ppSwapChain);
 
-	InitLogDelegate(MyLog);
-	SkyrimUpscaler::GetSingleton()->LoadINI();
-	SkyrimUpscaler::GetSingleton()->SetupSwapChain(*ppSwapChain);
-	SkyrimUpscaler::GetSingleton()->PreInit();
-	SkyrimUpscaler::GetSingleton()->InitUpscaler();
+		InitLogDelegate(MyLog);
+		SkyrimUpscaler::GetSingleton()->LoadINI();
+		SkyrimUpscaler::GetSingleton()->SetupSwapChain(*ppSwapChain);
+		SkyrimUpscaler::GetSingleton()->PreInit();
+		SkyrimUpscaler::GetSingleton()->InitUpscaler();
 
-	IDXGISwapChain1* mSwapChain = NULL;
+		IDXGISwapChain1* mSwapChain = NULL;
 
-	DXGI_SWAP_CHAIN_DESC  swapChainDesc = *pDesc;
-	DXGI_SWAP_CHAIN_DESC1 swapChainDesc1 = {};
-	swapChainDesc1.Width = SkyrimUpscaler::GetSingleton()->mRenderSizeX;
-	swapChainDesc1.Height = SkyrimUpscaler::GetSingleton()->mRenderSizeY;
-	swapChainDesc1.Format = swapChainDesc.BufferDesc.Format;
-	swapChainDesc1.Stereo = false;
-	swapChainDesc1.SampleDesc = swapChainDesc.SampleDesc;
-	swapChainDesc1.BufferUsage = swapChainDesc.BufferUsage;
-	swapChainDesc1.BufferCount = swapChainDesc.BufferCount;
-	swapChainDesc1.Scaling = DXGI_SCALING_STRETCH;
-	swapChainDesc1.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
-	swapChainDesc1.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
-	swapChainDesc1.Flags = swapChainDesc.Flags;
+		DXGI_SWAP_CHAIN_DESC  swapChainDesc = *pDesc;
+		DXGI_SWAP_CHAIN_DESC1 swapChainDesc1 = {};
+		swapChainDesc1.Width = SkyrimUpscaler::GetSingleton()->mRenderSizeX;
+		swapChainDesc1.Height = SkyrimUpscaler::GetSingleton()->mRenderSizeY;
+		swapChainDesc1.Format = swapChainDesc.BufferDesc.Format;
+		swapChainDesc1.Stereo = false;
+		swapChainDesc1.SampleDesc = swapChainDesc.SampleDesc;
+		swapChainDesc1.BufferUsage = swapChainDesc.BufferUsage;
+		swapChainDesc1.BufferCount = swapChainDesc.BufferCount;
+		swapChainDesc1.Scaling = DXGI_SCALING_STRETCH;
+		swapChainDesc1.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+		swapChainDesc1.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
+		swapChainDesc1.Flags = swapChainDesc.Flags;
 
-	HRESULT hResult = This->CreateSwapChainForComposition(pDevice, &swapChainDesc1, nullptr, &mSwapChain);
-	mSwapChain->QueryInterface(IID_PPV_ARGS(&SwapChainProxy->mSwapChain2));
+		HRESULT hResult = This->CreateSwapChainForComposition(pDevice, &swapChainDesc1, nullptr, &mSwapChain);
+		mSwapChain->QueryInterface(IID_PPV_ARGS(&SwapChainProxy->mSwapChain2));
 
-	*ppSwapChain = SwapChainProxy->mSwapChain2;
+		*ppSwapChain = SwapChainProxy->mSwapChain2;
+	}
 	return hr;
 }
 
@@ -248,9 +252,12 @@ HRESULT WINAPI hk_D3D11CreateDeviceAndSwapChain(
 	D3D_FEATURE_LEVEL*          pFeatureLevel,
 	ID3D11DeviceContext**       ppImmediateContext)
 {
-	IDXGIFactory2* mFactory = NULL;
-	pAdapter->GetParent(IID_PPV_ARGS(&mFactory));
-	*(uintptr_t*)&ptrCreateSwapChain = Detours::X64::DetourClassVTable(*(uintptr_t*)mFactory, &hk_IDXGIFactory_CreateSwapChain, 10);
+	static bool init = false;
+	if (!init) {
+		IDXGIFactory2* mFactory = NULL;
+		pAdapter->GetParent(IID_PPV_ARGS(&mFactory));
+		*(uintptr_t*)&ptrCreateSwapChain = Detours::X64::DetourClassVTable(*(uintptr_t*)mFactory, &hk_IDXGIFactory_CreateSwapChain, 10);
+	}
 
 	logger::info("Calling original D3D11CreateDeviceAndSwapChain");
 	HRESULT hr = (*ptrD3D11CreateDeviceAndSwapChain)(pAdapter,
@@ -266,29 +273,32 @@ HRESULT WINAPI hk_D3D11CreateDeviceAndSwapChain(
 		pFeatureLevel,
 		ppImmediateContext);
 
-	auto device = *ppDevice;
-	auto deviceContext = *ppImmediateContext;
-	auto swapChain = *ppSwapChain;
-	SettingGUI::GetSingleton()->InitIMGUI(SwapChainProxy->mSwapChain1, device, deviceContext);
+	if (!init) {
+		auto device = *ppDevice;
+		auto deviceContext = *ppImmediateContext;
+		auto swapChain = *ppSwapChain;
+		SettingGUI::GetSingleton()->InitIMGUI(SwapChainProxy->mSwapChain1, device, deviceContext);
 
-	logger::info("Detouring virtual function tables");
-	*(uintptr_t*)&ptrPresent = Detours::X64::DetourClassVTable(*(uintptr_t*)SwapChainProxy->mSwapChain2, &hk_IDXGISwapChain_Present, 8);
-	*(uintptr_t*)&ptrCreateTexture2D = Detours::X64::DetourClassVTable(*(uintptr_t*)device, &hk_ID3D11Device_CreateTexture2D, 5);
-	*(uintptr_t*)&ptrPSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_PSSetSamplers, 10);
-	*(uintptr_t*)&ptrVSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_VSSetSamplers, 26);
-	*(uintptr_t*)&ptrGSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_GSSetSamplers, 32);
-	*(uintptr_t*)&ptrHSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_HSSetSamplers, 61);
-	*(uintptr_t*)&ptrDSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_DSSetSamplers, 65);
-	*(uintptr_t*)&ptrCSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_CSSetSamplers, 70);
+		logger::info("Detouring virtual function tables");
+		*(uintptr_t*)&ptrPresent = Detours::X64::DetourClassVTable(*(uintptr_t*)SwapChainProxy->mSwapChain2, &hk_IDXGISwapChain_Present, 8);
+		*(uintptr_t*)&ptrCreateTexture2D = Detours::X64::DetourClassVTable(*(uintptr_t*)device, &hk_ID3D11Device_CreateTexture2D, 5);
+		*(uintptr_t*)&ptrPSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_PSSetSamplers, 10);
+		*(uintptr_t*)&ptrVSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_VSSetSamplers, 26);
+		*(uintptr_t*)&ptrGSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_GSSetSamplers, 32);
+		*(uintptr_t*)&ptrHSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_HSSetSamplers, 61);
+		*(uintptr_t*)&ptrDSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_DSSetSamplers, 65);
+		*(uintptr_t*)&ptrCSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_CSSetSamplers, 70);
 
-	*(uintptr_t*)&ptrOMSetRenderTargets = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_OMSetRenderTargets, 33);
-	*(uintptr_t*)&ptrRSSetViewports = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_RSSetViewports, 44);
-	//*(uintptr_t*)&ptrGetFullscreenState = Detours::X64::DetourClassVTable(*(uintptr_t*)SwapChainProxy->mSwapChain2, &hk_IDXGISwapChain_GetFullscreenState, 11);
+		*(uintptr_t*)&ptrOMSetRenderTargets = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_OMSetRenderTargets, 33);
+		*(uintptr_t*)&ptrRSSetViewports = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_RSSetViewports, 44);
+		//*(uintptr_t*)&ptrGetFullscreenState = Detours::X64::DetourClassVTable(*(uintptr_t*)SwapChainProxy->mSwapChain2, &hk_IDXGISwapChain_GetFullscreenState, 11);
 
-	// Replace the reference of the original swapchain with the ENB SwapChain wrapper
-	SwapChainProxy->mSwapChain2 = swapChain;
-	SwapChainProxy->usingSwapChain2 = true;
-	*ppSwapChain = SwapChainProxy;
+		// Replace the reference of the original swapchain with the ENB SwapChain wrapper
+		SwapChainProxy->mSwapChain2 = swapChain;
+		SwapChainProxy->usingSwapChain2 = true;
+		*ppSwapChain = SwapChainProxy;
+		init = true;
+	}
 
 	return hr;
 }
