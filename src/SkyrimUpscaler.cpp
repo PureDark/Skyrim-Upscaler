@@ -50,7 +50,8 @@ void SkyrimUpscaler::SaveINI()
 	SetSettingFloat("Settings", mMipLodBias);
 	SetSettingBool("Settings", mSharpening);
 	SetSettingFloat("Settings", mSharpness);
-	SetSettingInt("Hotkeys", SettingGUI::GetSingleton()->mToggleHotkey);
+	int mToggleHotkey = SettingGUI::GetSingleton()->mToggleHotkey;
+	SetSettingInt("Hotkeys", mToggleHotkey);
 }
 
 void SkyrimUpscaler::MessageHandler(SKSE::MessagingInterface::Message* a_msg)
