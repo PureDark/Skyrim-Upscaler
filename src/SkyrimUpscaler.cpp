@@ -24,7 +24,9 @@ void SkyrimUpscaler::LoadINI()
 	GetSettingBool("Settings", mUseOptimalMipLodBias, true);
 	mUpscaleType = std::clamp(mUpscaleType, 0, 3);
 	mQualityLevel = std::clamp(mQualityLevel, 0, 3);
-	GetSettingInt("Hotkeys", SettingGUI::GetSingleton()->mToggleHotkey, ImGuiKey_End);
+	int mToggleHotkey = ImGuiKey_End;
+	GetSettingInt("Hotkeys", mToggleHotkey, ImGuiKey_End);
+	SettingGUI::GetSingleton()->mToggleHotkey = mToggleHotkey;
 
 	auto bFXAAEnabled = RE::GetINISetting("bFXAAEnabled:Display");
 	if (!REL::Module::IsVR()) {
@@ -44,7 +46,8 @@ void SkyrimUpscaler::SaveINI()
 	SetSettingInt("Settings", mUpscaleType);
 	SetSettingInt("Settings", mQualityLevel);
 	SetSettingBool("Settings", mUseOptimalMipLodBias);
-	SetSettingInt("Hotkeys", SettingGUI::GetSingleton()->mToggleHotkey);
+	int mToggleHotkey = SettingGUI::GetSingleton()->mToggleHotkey;
+	SetSettingInt("Hotkeys", mToggleHotkey);
 }
 
 void SkyrimUpscaler::MessageHandler(SKSE::MessagingInterface::Message* a_msg)
