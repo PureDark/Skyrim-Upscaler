@@ -99,10 +99,10 @@ void SkyrimUpscaler::EvaluateUpscaler(ID3D11Texture2D* source)
 
 	if (mSwapChain != nullptr) {
 		if (mTargetTex.mImage != nullptr && mDepthBuffer.mImage != nullptr && mMotionVectors.mImage != nullptr) {
-			ID3D11Texture2D* motionVectorTex = (RE::UI::GetSingleton()->GameIsPaused() ? mMotionVectorsEmpty.mImage : mMotionVectors.mImage);
+			ID3D11Texture2D* motionVectorTex = (RE::UI::GetSingleton()->GameIsPaused() && !REL::Module::IsVR() ? mMotionVectorsEmpty.mImage : mMotionVectors.mImage);
 			ID3D11Texture2D* transparentMask = (mEnableTransparentMask ? mTransparentMask.mImage : nullptr);
 			bool             enable = IsEnabled();
-			bool             delayOneFrame = (lastEnable && !enable);
+			bool             delayOneFrame = false && (lastEnable && !enable);
 			bool             TAAEnabled = (mUpscaleType == TAA);
 			if (((IsEnabled() && !DRS::GetSingleton()->reset) || delayOneFrame) && !TAAEnabled) {
 				lastEnable = enable;

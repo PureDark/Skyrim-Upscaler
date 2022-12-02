@@ -303,15 +303,21 @@ struct UpscalerHooks
 			}
 			SkyrimUpscaler::GetSingleton()->EvaluateUpscaler();
 			func(param_1, param_2);
-			static ID3D11RenderTargetView* TargetRTV = nullptr;
-			static ID3D11Resource* TargetTex = nullptr;
+			static ID3D11Resource*         TargetTex = nullptr;
+			static ID3D11Resource*         DepthTex = nullptr;
 			if (TargetTex == nullptr) {
-				ID3D11DepthStencilView* DSV;
-				SkyrimUpscaler::GetSingleton()->mContext->OMGetRenderTargets(1, &TargetRTV, &DSV);
-				if (TargetRTV != nullptr)
-					TargetRTV->GetResource(&TargetTex);
+				ID3D11RenderTargetView* RTV = nullptr;
+				ID3D11DepthStencilView* DSV = nullptr;
+				SkyrimUpscaler::GetSingleton()->mContext->OMGetRenderTargets(1, &RTV, &DSV);
+				if (RTV != nullptr)
+					RTV->GetResource(&TargetTex);
+				if (DSV != nullptr)
+					DSV->GetResource(&DepthTex);
 			}
-			SkyrimUpscaler::GetSingleton()->mContext->CopyResource(TargetTex, SkyrimUpscaler::GetSingleton()->mTargetTex.mImage);
+			if (SkyrimUpscaler::GetSingleton()->IsEnabled()) {
+				SkyrimUpscaler::GetSingleton()->mContext->CopyResource(TargetTex, SkyrimUpscaler::GetSingleton()->mTargetTex.mImage);
+				SkyrimUpscaler::GetSingleton()->mContext->CopyResource(SkyrimUpscaler::GetSingleton()->mDepthBuffer.mImage, DepthTex);
+			}
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
