@@ -218,7 +218,7 @@ HRESULT WINAPI hk_D3D11CreateDeviceAndSwapChain(
 		pFeatureLevels,
 		FeatureLevels,
 		SDKVersion,
-		pSwapChainDesc,
+		&sDesc,
 		ppSwapChain,
 		ppDevice,
 		pFeatureLevel,

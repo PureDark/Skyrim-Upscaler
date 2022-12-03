@@ -135,7 +135,8 @@ void SettingGUI::OnRender()
 		imgui_combo_names.push_back("FSR2");
 		imgui_combo_names.push_back("XeSS");
 		imgui_combo_names.push_back("DLAA");
-		imgui_combo_names.push_back("TAA");
+		//Somehow TAA hook not working in VR
+		//imgui_combo_names.push_back("TAA");
 
 		if (ImGui::Combo("Upscale Type", (int*)&SkyrimUpscaler::GetSingleton()->mUpscaleType, imgui_combo_names.data(), imgui_combo_names.size())) {
 			if (SkyrimUpscaler::GetSingleton()->mUpscaleType < 0 || SkyrimUpscaler::GetSingleton()->mUpscaleType >= imgui_combo_names.size()) {
