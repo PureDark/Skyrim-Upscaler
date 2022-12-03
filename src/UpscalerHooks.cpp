@@ -79,6 +79,7 @@ HRESULT WINAPI hk_ID3D11Device_CreateTexture2D(ID3D11Device* This, const D3D11_T
 			locking = true;
 			SkyrimUpscaler::GetSingleton()->SetupDepth(*ppTexture2D);
 			locking = false;
+			SkyrimUpscaler::GetSingleton()->InitUpscaler();
 		}
 	} else if (pDesc->Format == DXGI_FORMAT_R8G8_UNORM) {
 		if (pDesc->Width == SkyrimUpscaler::GetSingleton()->mDisplaySizeX &&
@@ -205,13 +206,9 @@ HRESULT WINAPI hk_D3D11CreateDeviceAndSwapChain(
 	ID3D11DeviceContext**       ppImmediateContext)
 {
 	DXGI_SWAP_CHAIN_DESC sDesc;
-	if (REL::Module::IsVR()) {
-		memcpy(&sDesc, pSwapChainDesc, sizeof(DXGI_SWAP_CHAIN_DESC));
-		sDesc.BufferDesc.Width = 1024;
-		sDesc.BufferDesc.Height = 1024;
-	}
-	else
-		sDesc = *pSwapChainDesc;
+	memcpy(&sDesc, pSwapChainDesc, sizeof(DXGI_SWAP_CHAIN_DESC));
+	sDesc.BufferDesc.Width = 1024;
+	sDesc.BufferDesc.Height = 1024;
 
 	logger::info("Calling original D3D11CreateDeviceAndSwapChain");
 	HRESULT hr = (*ptrD3D11CreateDeviceAndSwapChain)(pAdapter,
@@ -221,7 +218,7 @@ HRESULT WINAPI hk_D3D11CreateDeviceAndSwapChain(
 		pFeatureLevels,
 		FeatureLevels,
 		SDKVersion,
-		&sDesc,
+		pSwapChainDesc,
 		ppSwapChain,
 		ppDevice,
 		pFeatureLevel,
@@ -255,9 +252,10 @@ struct UpscalerHooks
 		static void thunk()
 		{
 			func();
-			if (!REL::Module::IsVR())
-				MenuOpenCloseEventHandler::Register();
-			SkyrimUpscaler::GetSingleton()->InitUpscaler();
+			//MenuOpenCloseEventHandler::Register();
+			
+			// Depth not found at this point
+			//SkyrimUpscaler::GetSingleton()->InitUpscaler();
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
@@ -301,7 +299,6 @@ struct UpscalerHooks
 					SkyrimUpscaler::GetSingleton()->SetupTarget(targetTex);
 				}
 			}
-			SkyrimUpscaler::GetSingleton()->EvaluateUpscaler();
 			func(param_1, param_2);
 			static ID3D11Resource*         TargetTex = nullptr;
 			static ID3D11Resource*         DepthTex = nullptr;
@@ -315,7 +312,7 @@ struct UpscalerHooks
 					DSV->GetResource(&DepthTex);
 			}
 			if (SkyrimUpscaler::GetSingleton()->IsEnabled()) {
-				SkyrimUpscaler::GetSingleton()->mContext->CopyResource(TargetTex, SkyrimUpscaler::GetSingleton()->mTargetTex.mImage);
+				SkyrimUpscaler::GetSingleton()->EvaluateUpscaler(TargetTex);
 				SkyrimUpscaler::GetSingleton()->mContext->CopyResource(SkyrimUpscaler::GetSingleton()->mDepthBuffer.mImage, DepthTex);
 			}
 		}
@@ -352,7 +349,7 @@ struct UpscalerHooks
 	{
 		// Hook for getting the swapchain
 		// Nope, depth and motion texture are already created after this function, so can't use it
-		stl::write_thunk_call<BSGraphics_Renderer_Init_InitD3D>(REL::RelocationID(75595, 77226).address() + REL::Relocate(0x50, 0x2BC));
+		// stl::write_thunk_call<BSGraphics_Renderer_Init_InitD3D>(REL::RelocationID(75595, 77226).address() + REL::Relocate(0x50, 0x2BC));
 		// Have to hook the creation of SwapChain to hook CreateTexture2D before depth and motion textures are created
 		char* ptr = nullptr;
 		auto  moduleBase = (uintptr_t)GetModuleHandle(ptr);

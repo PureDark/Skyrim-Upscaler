@@ -89,21 +89,33 @@ public:
 	}
 	void Release()
 	{
-		if (mRTV)
+		if (mRTV) {
 			mRTV->Release();
-		if (mSRV)
+			mRTV = nullptr;
+		}
+		if (mSRV) {
 			mSRV->Release();
-		if (mDSV)
+			mSRV = nullptr;
+		}
+		if (mDSV) {
 			mDSV->Release();
-		if (mImage)
+			mDSV = nullptr;
+		}
+		if (mImage) {
 			mImage->Release();
+			mImage = nullptr;
+		}
 	}
+};
+
+struct JitterConstants
+{
+	float jitterOffset[4];
 };
 
 class SkyrimUpscaler
 {
 public:
-	//Reserve the second value for VR
 	bool  mEnableUpscaler = false;
 	float mJitterIndex{0};
 	float mJitterOffsets[2];
@@ -122,16 +134,40 @@ public:
 
 	bool mDisableResultCopying{ false };
 	bool mUseOptimalMipLodBias{ true };
-	bool mEnableTransparentMask{ false };
+	bool mEnableTransparencyMask{ false };
 
-	ImageWrapper         mTempColor;
-	ImageWrapper         mTargetTex;
-	ImageWrapper         mOutColor;
-	ImageWrapper         mMotionVectorsEmpty;
-	ImageWrapper         mDepthBuffer;
-	ImageWrapper         mMotionVectors;
-	ImageWrapper         mOpaqueColor;
-	ImageWrapper         mTransparentMask;
+	ImageWrapper mTargetTex;
+	ImageWrapper mTempColor;
+	ImageWrapper mDepthBuffer;
+	ImageWrapper mMotionVectors;
+	ImageWrapper mOpaqueColor;
+	ImageWrapper mTransparentMask;
+
+	// For VR Fixed Foveated DLSS
+	float        mFoveatedScaleX{ 0.67f };
+	float        mFoveatedScaleY{ 0.57f };
+	float        mFoveatedOffsetX{ 0.04f };
+	float        mFoveatedOffsetY{ 0.04f };
+	int          mFoveatedDisplaySizeX{ 0 };
+	int          mFoveatedDisplaySizeY{ 0 };
+	int          mFoveatedRenderSizeX{ 0 };
+	int          mFoveatedRenderSizeY{ 0 };
+	D3D11_BOX    mSrcBox[2];
+	D3D11_BOX    mDstBox[2];
+	D3D11_BOX    mOutBox;
+	ImageWrapper mOutColorRect[2];
+	ImageWrapper mTempColorRect[2];
+	ImageWrapper mDepthRect[2];
+	ImageWrapper mMotionVectorRect[2];
+
+	ID3D11VertexShader*    mVertexShader{ nullptr };
+	ID3D11PixelShader*     mPixelShader{ nullptr };
+	ID3D11SamplerState*    mSampler{ nullptr };
+	ID3D11RasterizerState* mRasterizerState{ nullptr };
+	ID3D11BlendState*      mBlendState{ nullptr };
+	ID3D11Buffer*          mConstantsBuffer{ nullptr };
+	JitterConstants        mJitterConstants;
+
 	IDXGISwapChain*      mSwapChain{ nullptr };
 	ID3D11Device*        mDevice{ nullptr };
 	ID3D11DeviceContext* mContext{ nullptr };
@@ -151,7 +187,7 @@ public:
 	void MessageHandler(SKSE::MessagingInterface::Message* a_msg);
 
 	float GetVerticalFOVRad();
-	void  EvaluateUpscaler(ID3D11Texture2D* source = nullptr);
+	void  EvaluateUpscaler(ID3D11Resource* destTex = nullptr);
 
 	bool IsEnabled();
 
@@ -167,6 +203,10 @@ public:
 	void SetEnabled(bool enabled);
 	void PreInit();
 	void InitUpscaler();
+	void ReleaseFoveatedResources();
+	void SetupD3DBox(float offsetX, float offsetY);
+	void InitShader();
+	void RenderTexture(ID3D11ShaderResourceView* sourceTexture, ID3D11RenderTargetView* target, int width, int height);
 };
 
 void InstallUpscalerHooks();

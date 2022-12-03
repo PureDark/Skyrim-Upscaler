@@ -103,7 +103,7 @@ void SettingGUI::OnRender()
 		}
 		ImGui::Checkbox("Disable Result Copying", &SkyrimUpscaler::GetSingleton()->mDisableResultCopying);
 		ImGui::Checkbox("Jitter", &SkyrimUpscaler::GetSingleton()->mEnableJitter);
-		ImGui::Checkbox("Enable Transparent Mask", &SkyrimUpscaler::GetSingleton()->mEnableTransparentMask);
+		//ImGui::Checkbox("Enable Transparency Mask", &SkyrimUpscaler::GetSingleton()->mEnableTransparencyMask);
 		if (ImGui::Checkbox("Sharpness", &SkyrimUpscaler::GetSingleton()->mSharpening)) {
 			SkyrimUpscaler::GetSingleton()->InitUpscaler();
 		}
@@ -121,6 +121,15 @@ void SettingGUI::OnRender()
 		ImGui::DragFloat("Mip Lod Bias", &SkyrimUpscaler::GetSingleton()->mMipLodBias, 0.1f, -3.0f, 3.0f);
 		ImGui::EndDisabled();
 
+		ImGui::Spacing();
+		if (ImGui::DragFloat("Foveated Offset X", &SkyrimUpscaler::GetSingleton()->mFoveatedOffsetX, 0.001f, 0.0f, 1.0f)) {
+			SkyrimUpscaler::GetSingleton()->SetupD3DBox(SkyrimUpscaler::GetSingleton()->mFoveatedOffsetX, SkyrimUpscaler::GetSingleton()->mFoveatedOffsetY);
+		}
+		if (ImGui::DragFloat("Foveated Offset Y", &SkyrimUpscaler::GetSingleton()->mFoveatedOffsetY, 0.001f, 0.0f, 1.0f)) {
+			SkyrimUpscaler::GetSingleton()->SetupD3DBox(SkyrimUpscaler::GetSingleton()->mFoveatedOffsetX, SkyrimUpscaler::GetSingleton()->mFoveatedOffsetY);
+		}
+		ImGui::Spacing();
+
 		std::vector<const char*> imgui_combo_names{};
 		imgui_combo_names.push_back("DLSS");
 		imgui_combo_names.push_back("FSR2");
@@ -133,7 +142,6 @@ void SettingGUI::OnRender()
 				SkyrimUpscaler::GetSingleton()->mUpscaleType = 0;
 			}
 
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 			SkyrimUpscaler::GetSingleton()->InitUpscaler();
 		}
 		const auto qualities = (SkyrimUpscaler::GetSingleton()->mUpscaleType == XESS) 
@@ -142,7 +150,6 @@ void SettingGUI::OnRender()
 
 		ImGui::BeginDisabled(SkyrimUpscaler::GetSingleton()->mUpscaleType == TAA);
 		if (ImGui::Combo("Quality Level", (int*)&SkyrimUpscaler::GetSingleton()->mQualityLevel, qualities)) {
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 			SkyrimUpscaler::GetSingleton()->InitUpscaler();
 		}
 
