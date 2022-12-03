@@ -295,7 +295,8 @@ HRESULT WINAPI hk_D3D11CreateDeviceAndSwapChain(
 
 		// Replace the reference of the original swapchain with the ENB SwapChain wrapper
 		SwapChainProxy->mSwapChain2 = swapChain;
-		SwapChainProxy->usingSwapChain2 = true;
+		// In order to make IED compatible, use the real SwapChain initially
+		SwapChainProxy->usingSwapChain2 = false;
 		*ppSwapChain = SwapChainProxy;
 		init = true;
 	}
@@ -305,6 +306,17 @@ HRESULT WINAPI hk_D3D11CreateDeviceAndSwapChain(
 
 struct UpscalerHooks
 {
+	struct BSGraphics_Renderer_Init_CreateD3D
+	{
+		static void thunk()
+		{
+			// To make IED compatible
+			func(); // This is IED's hook
+			// Switching back to the fake swapchain after IED has done with SwapChain
+			SwapChainProxy->usingSwapChain2 = true;
+		}
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
 
 	struct BSGraphics_Renderer_Init_InitD3D
 	{
@@ -335,7 +347,6 @@ struct UpscalerHooks
 				UnkOuterStruct::GetSingleton()->SetTAA(SkyrimUpscaler::GetSingleton()->mUpscaleType == TAA);
 			}
 			func(BSGraphics_Renderer, unk);
-			//SkyrimUpscaler::GetSingleton()->EvaluateUpscaler();
 			if (!backbuffer)
 				SwapChainProxy->mSwapChain1->GetBuffer(0, IID_PPV_ARGS(&backbuffer));
 			if (!backbuffer2)
@@ -401,47 +412,11 @@ struct UpscalerHooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	//struct BSScaleformManager_LoadMovie
-	//{
-	//	static void thunk(RE::GFxMovieView* a_movieView, float a_deltaT, std::uint32_t a_frameCatchUpCount)
-	//	{
-	//		RE::GViewport viewDesc;
-	//		a_movieView->GetViewport(&viewDesc);
-	//		viewDesc.bufferWidth = SkyrimUpscaler::GetSingleton()->mDisplaySizeX;
-	//		viewDesc.bufferHeight = SkyrimUpscaler::GetSingleton()->mDisplaySizeY;
-	//		viewDesc.width = SkyrimUpscaler::GetSingleton()->mDisplaySizeX;
-	//		viewDesc.height = SkyrimUpscaler::GetSingleton()->mDisplaySizeY;
-	//		viewDesc.scale = 0.5f;
-	//		a_movieView->SetViewport(viewDesc);
-	//		RE::GRectF rect = a_movieView->GetSafeRect();
-	//		rect.right = SkyrimUpscaler::GetSingleton()->mDisplaySizeX;
-	//		rect.bottom = SkyrimUpscaler::GetSingleton()->mDisplaySizeY;
-	//		a_movieView->SetSafeRect(rect);
-	//		a_movieView->Advance(a_deltaT, a_frameCatchUpCount);
-	//	}
-	//	static inline REL::Relocation<decltype(thunk)> func;
-	//};
-
 	struct MistMenu_PostDisplay
 	{
 		static void thunk(void* a1, uint32_t a2, uint32_t a3)
 		{
 			func(a1, a2, a3);
-
-			SkyrimUpscaler::GetSingleton()->ForceEvaluateUpscaler(backbuffer2, backbuffer);
-
-			auto DSV2 = SkyrimUpscaler::GetSingleton()->mTempDepthBuffer.GetDSV();
-			SwapChainProxy->mContext->OMSetRenderTargets(1, &backbufferRTV, DSV2);
-			bSwitchRTV = true;
-		}
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	struct StatsMenu_PostDisplay
-	{
-		static void thunk(void* a1, uint32_t a2, RE::NiCamera* a3, uint32_t a4)
-		{
-			func(a1, a2, a3, a4);
 
 			SkyrimUpscaler::GetSingleton()->ForceEvaluateUpscaler(backbuffer2, backbuffer);
 
@@ -483,7 +458,7 @@ struct UpscalerHooks
 	static void Install()
 	{
 		// Hook for getting the swapchain
-		// Nope, depth and motion texture are already created after this function, so can't use it
+		stl::write_thunk_call<BSGraphics_Renderer_Init_CreateD3D>(REL::RelocationID(75595, 77226).address() + REL::Relocate(0x9, 0x275));
 		stl::write_thunk_call<BSGraphics_Renderer_Init_InitD3D>(REL::RelocationID(75595, 77226).address() + REL::Relocate(0x50, 0x2BC));
 		// Have to hook the creation of SwapChain to hook CreateTexture2D before depth and motion textures are created
 		char* ptr = nullptr;
@@ -498,11 +473,8 @@ struct UpscalerHooks
 		stl::write_thunk_call<BSGraphics_Renderer_Begin_UpdateJitter>(REL::RelocationID(75460, 77245).address() + REL::Relocate(0xE5, 0xE2));  // D6A0C0 (D6A1A5), DA5A00 (DA5AE2)
 		// GetClientRectHook
 		stl::write_thunk_call6<GetClientRectHook>(REL::RelocationID(75460, 77245).address() + REL::Relocate(0x192, 0x18B));  // D6A0C0 (D6A252), DA5A00 (DA5B8B)
-		// BSScaleformManager_LoadMovie
-		//stl::write_thunk_call6<BSScaleformManager_LoadMovie>(REL::RelocationID(80302, 82325).address() + REL::Relocate(0x39B, 0x399));
 
 		stl::write_thunk_call<MistMenu_PostDisplay>(REL::RelocationID(51855, 52727).address() + REL::Relocate(0x7A1, 0x7A4));      // 8D2390 (8D2B31), 9017E0 (901F84)
-		//stl::write_thunk_call<StatsMenu_PostDisplay>(REL::RelocationID(51639, 52511).address() + REL::Relocate(0x1B, 0x1B));   // 8C07F0 (8C080B), 8EFEE0 (8EFEFB) 
 		
 		// unlock cursor from low resolution rect
 		stl::write_thunk_call<MenuEventHandler_ProcessMouseMove>(REL::RelocationID(50604, 51498).address() + REL::Relocate(0xB, 0xB));  // 875A40 (875A4B), 8A3FD0 (8A3FDB)
