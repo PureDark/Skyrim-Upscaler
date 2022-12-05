@@ -202,7 +202,7 @@ void DXGISwapChainProxy::InitShader()
 	mDevice->CreateBlendState(&blendDesc, &mBlendState);
 }
 
-void DXGISwapChainProxy::RenderTexture(int pixelShaderIndex, int numViews, ID3D11ShaderResourceView** inputSRV, ID3D11RenderTargetView* target, int width, int height, int topLeftX = 0, int topLeftY = 0)
+void DXGISwapChainProxy::RenderTexture(int pixelShaderIndex, int numViews, ID3D11ShaderResourceView** inputSRV, ID3D11RenderTargetView* target, int width, int height, int topLeftX, int topLeftY)
 {
 	mContext->OMSetRenderTargets(1, &target, nullptr);
 	mContext->OMSetBlendState(mBlendState, nullptr, 0xffffffff);
