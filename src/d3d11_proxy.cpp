@@ -4,8 +4,8 @@
 #include <DRS.h>
 #include <SkyrimUpscaler.h>
 #include <d3dcompiler.h>
-#include <hlsl/flip.vs.inc>
-#include <hlsl/flip.ps.inc>
+#include <hlsl/flip_vs.inc>
+#include <hlsl/flip_ps.inc>
 #include <hlsl/xbr_ps.inc>
 #include <hlsl/xbr_edge_ps.inc>
 #include <ScreenGrab11.h>
@@ -154,9 +154,8 @@ HRESULT STDMETHODCALLTYPE DXGISwapChainProxy::GetLastPresentCount(_Out_ UINT* pL
 
 void DXGISwapChainProxy::InitShader()
 {
-	mDevice->CreateVertexShader(VS_Flip, sizeof(VS_Flip), nullptr, &mVertexShader);
-	mDevice->CreatePixelShader(PS_Flip, sizeof(PS_Flip), nullptr, &mPixelShader);
-	mDevice->CreatePixelShader(PS_XBR, sizeof(PS_XBR), nullptr, &mPixelShader2);
+	mDevice->CreateVertexShader(flip_vs, sizeof(flip_vs), nullptr, &mVertexShader);
+	mDevice->CreatePixelShader(flip_ps, sizeof(flip_ps), nullptr, &mPixelShader[0]);
 
 	D3D11_SAMPLER_DESC sd;
 	sd.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
@@ -203,19 +202,14 @@ void DXGISwapChainProxy::InitShader()
 	mDevice->CreateBlendState(&blendDesc, &mBlendState);
 }
 
-void DXGISwapChainProxy::RenderTexture(ID3D11ShaderResourceView* sourceTexture, ID3D11RenderTargetView* target, int width, int height, ID3D11ShaderResourceView* extraSRV)
+void DXGISwapChainProxy::RenderTexture(int pixelShaderIndex, int numViews, ID3D11ShaderResourceView** inputSRV, ID3D11RenderTargetView* target, int width, int height, int topLeftX = 0, int topLeftY = 0)
 {
 	mContext->OMSetRenderTargets(1, &target, nullptr);
 	mContext->OMSetBlendState(mBlendState, nullptr, 0xffffffff);
 	mContext->OMSetDepthStencilState(nullptr, 0);
 	mContext->VSSetShader(mVertexShader, nullptr, 0);
-	if (extraSRV == nullptr)
-		mContext->PSSetShader(mPixelShader, nullptr, 0);
-	else
-		mContext->PSSetShader(mPixelShader2, nullptr, 0);
-	mContext->PSSetShaderResources(0, 1, &sourceTexture);
-	if (extraSRV != nullptr)
-		mContext->PSSetShaderResources(1, 1, &extraSRV);
+	mContext->PSSetShader(mPixelShader[pixelShaderIndex], nullptr, 0);
+	mContext->PSSetShaderResources(0, numViews, inputSRV);
 	mContext->PSSetSamplers(0, 1, &mSampler);
 	mContext->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
 	mContext->IASetVertexBuffers(0, 0, nullptr, nullptr, nullptr);

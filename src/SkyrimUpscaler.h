@@ -87,13 +87,24 @@ public:
 		}
 		return mDSV;
 	}
-	void Release() {
-		if (mImage)
-			mImage->Release();
-		if (mRTV)
+	void Release()
+	{
+		if (mRTV) {
 			mRTV->Release();
-		if (mSRV)
+			mRTV = nullptr;
+		}
+		if (mSRV) {
 			mSRV->Release();
+			mSRV = nullptr;
+		}
+		if (mDSV) {
+			mDSV->Release();
+			mDSV = nullptr;
+		}
+		if (mImage) {
+			mImage->Release();
+			mImage = nullptr;
+		}
 	}
 };
 

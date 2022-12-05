@@ -166,7 +166,7 @@ ret
 // Approximately 132 instruction slots used
 #endif
 
-const BYTE PS_EDGE_XBR[] =
+const BYTE xbr_edge_ps[] =
 {
      68,  88,  66,  67,  74, 244, 
     109,  32,  50,  69, 171,   6, 

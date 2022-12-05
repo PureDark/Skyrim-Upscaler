@@ -63,7 +63,7 @@ ret
 // Approximately 27 instruction slots used
 #endif
 
-const BYTE PS_XBR[] =
+const BYTE xbr_ps[] =
 {
      68,  88,  66,  67, 156, 170, 
      57,  93, 155, 115, 141, 189, 
