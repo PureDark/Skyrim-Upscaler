@@ -39,7 +39,7 @@ HRESULT WINAPI hk_IDXGISwapChain_Present(IDXGISwapChain* This, UINT SyncInterval
 	SettingGUI::GetSingleton()->OnRender();
 	auto hr = (This->*ptrPresent)(SyncInterval, Flags);
 	DRS::GetSingleton()->Update();
-	return 0;
+	return hr;
 }
 
 HRESULT WINAPI hk_ID3D11Device_CreateTexture2D(ID3D11Device* This, const D3D11_TEXTURE2D_DESC* pDesc, const D3D11_SUBRESOURCE_DATA* pInitialData, ID3D11Texture2D** ppTexture2D)
@@ -134,7 +134,7 @@ static void SetMipLodBias(ID3D11SamplerState** outSamplers, UINT StartSlot, UINT
 		if (mappedSamplers.find(orig) == mappedSamplers.end()) {
 			D3D11_SAMPLER_DESC sd;
 			orig->GetDesc(&sd);
-			if (sd.MipLODBias != 0 || sd.MaxAnisotropy <= 1) {
+			if (sd.MipLODBias != 0) {
 				// do not mess with samplers that already have a bias or are not doing anisotropic filtering.
 				// should hopefully reduce the chance of causing rendering errors.
 				passThroughSamplers.insert(orig);
@@ -332,7 +332,7 @@ struct UpscalerHooks
 					SkyrimUpscaler::GetSingleton()->GetJitters(&x, &y);
 					float w = SkyrimUpscaler::GetSingleton()->mRenderSizeX;
 					float h = SkyrimUpscaler::GetSingleton()->mRenderSizeY;
-					a_state->jitter[0] = -2 * x / w;
+					a_state->jitter[0] = -4 * x / w;
 					a_state->jitter[1] = 2 * y / h;
 					SkyrimUpscaler::GetSingleton()->SetJitterOffsets(-x, -y);
 				}

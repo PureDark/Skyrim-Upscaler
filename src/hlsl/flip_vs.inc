@@ -33,7 +33,7 @@ ret
 // Approximately 6 instruction slots used
 #endif
 
-const BYTE VS_Flip[] =
+const BYTE flip_vs[] =
 {
      68,  88,  66,  67, 170,  35, 
      41,  75, 219, 214, 105, 187, 

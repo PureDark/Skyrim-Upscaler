@@ -108,9 +108,23 @@ public:
 	}
 };
 
-struct JitterConstants
+struct CustomConstants
 {
-	float jitterOffset[4];
+	float jitterOffset[2];
+	float dynamicResScale[2];
+	float screenSize[2];
+	float blurIntensity;
+	float blendScale;
+	float leftRect[4];
+	float rightRect[4];
+};
+
+struct FoveatedRect
+{
+	float left;
+	float top;
+	float right;
+	float bottom;
 };
 
 class SkyrimUpscaler
@@ -131,20 +145,30 @@ public:
 	int   mUpscaleType{ 0 };
 	int   mQualityLevel{ 0 };
 	float mMipLodBias{ 0 };
+	int   mJitterPhase{ 0 };
 
-	bool mDisableResultCopying{ false };
+	bool mDisableEvaluation{ false };
 	bool mUseOptimalMipLodBias{ true };
 	bool mEnableTransparencyMask{ false };
+	bool mCancelJitter{ true };
+	bool mBlurEdges{ false };
+
+	float mCancelScaleX{ 0.5f };
+	float mCancelScaleY{ 0.5f };
+	float mBlurIntensity{ 1.5f };
+	float mBlendScale{ 5.0f };
 
 	ImageWrapper mTargetTex;
 	ImageWrapper mTempColor;
+	ImageWrapper mAccumulateTex;
 	ImageWrapper mDepthBuffer;
+	ImageWrapper mTempDepth;
 	ImageWrapper mMotionVectors;
 	ImageWrapper mOpaqueColor;
 	ImageWrapper mTransparentMask;
 
 	// For VR Fixed Foveated DLSS
-	float        mFoveatedScaleX{ 0.67f };
+	float        mFoveatedScaleX{ 0.7f };
 	float        mFoveatedScaleY{ 0.57f };
 	float        mFoveatedOffsetX{ 0.04f };
 	float        mFoveatedOffsetY{ 0.04f };
@@ -154,19 +178,19 @@ public:
 	int          mFoveatedRenderSizeY{ 0 };
 	D3D11_BOX    mSrcBox[2];
 	D3D11_BOX    mDstBox[2];
-	D3D11_BOX    mOutBox;
+	FoveatedRect mSrcBoxNorm[2];
 	ImageWrapper mOutColorRect[2];
 	ImageWrapper mTempColorRect[2];
 	ImageWrapper mDepthRect[2];
 	ImageWrapper mMotionVectorRect[2];
 
 	ID3D11VertexShader*    mVertexShader{ nullptr };
-	ID3D11PixelShader*     mPixelShader{ nullptr };
+	ID3D11PixelShader*     mPixelShader[3]{ nullptr, nullptr, nullptr };
 	ID3D11SamplerState*    mSampler{ nullptr };
 	ID3D11RasterizerState* mRasterizerState{ nullptr };
 	ID3D11BlendState*      mBlendState{ nullptr };
 	ID3D11Buffer*          mConstantsBuffer{ nullptr };
-	JitterConstants        mJitterConstants;
+	CustomConstants        mCustomConstants;
 
 	IDXGISwapChain*      mSwapChain{ nullptr };
 	ID3D11Device*        mDevice{ nullptr };
@@ -206,7 +230,7 @@ public:
 	void ReleaseFoveatedResources();
 	void SetupD3DBox(float offsetX, float offsetY);
 	void InitShader();
-	void RenderTexture(ID3D11ShaderResourceView* sourceTexture, ID3D11RenderTargetView* target, int width, int height);
+	void RenderTexture(int pixelShaderIndex, int numViews, ID3D11ShaderResourceView** inputSRV, ID3D11RenderTargetView* target, int width, int height, int topLeftX = 0, int topLeftY = 0);
 };
 
 void InstallUpscalerHooks();

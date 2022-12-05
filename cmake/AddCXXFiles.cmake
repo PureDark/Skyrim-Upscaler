@@ -47,10 +47,29 @@ function(add_cxx_files TARGET)
 		CONFIGURE_DEPENDS
 		"src/hlsl/*.inc"
 	)
+	
+	file(GLOB_RECURSE SHADER_VS_SOURCE_FILES
+		LIST_DIRECTORIES false
+		CONFIGURE_DEPENDS
+		"src/hlsl/*_vs.hlsl"
+	)
+	
+	file(GLOB_RECURSE SHADER_PS_SOURCE_FILES
+		LIST_DIRECTORIES false
+		CONFIGURE_DEPENDS
+		"src/hlsl/*_ps.hlsl"
+	)
 
 	source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/src
 		PREFIX "Shader Files"
-		FILES ${SHADER_FILES})
+		FILES ${SHADER_FILES}
+		      ${SHADER_VS_SOURCE_FILES}
+		      ${SHADER_PS_SOURCE_FILES})
 
-	target_sources("${TARGET}" PRIVATE ${SHADER_FILES})
+	target_sources("${TARGET}" PRIVATE ${SHADER_FILES}
+                                       ${SHADER_VS_SOURCE_FILES}
+                                       ${SHADER_PS_SOURCE_FILES})
+
+	set_source_files_properties(${SHADER_VS_SOURCE_FILES} PROPERTIES VS_SHADER_OBJECT_FILE_NAME "" VS_SHADER_OUTPUT_HEADER_FILE "../src/hlsl/%(Filename).inc" VS_SHADER_VARIABLE_NAME "%(Filename)" VS_SHADER_TYPE Vertex VS_SHADER_MODEL 5.0 VS_SHADER_ENTRYPOINT main)
+	set_source_files_properties(${SHADER_PS_SOURCE_FILES} PROPERTIES VS_SHADER_OBJECT_FILE_NAME "" VS_SHADER_OUTPUT_HEADER_FILE "../src/hlsl/%(Filename).inc" VS_SHADER_VARIABLE_NAME "%(Filename)" VS_SHADER_TYPE Pixel VS_SHADER_MODEL 5.0 VS_SHADER_ENTRYPOINT main)
 endfunction()

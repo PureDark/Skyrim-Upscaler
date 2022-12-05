@@ -94,6 +94,15 @@ void SettingGUI::OnRender()
 		}
 	}
 
+	static int initCounter = -1;
+	if (initCounter > 0) {
+		initCounter--;
+	}
+	if (initCounter == 0) {
+		SkyrimUpscaler::GetSingleton()->InitUpscaler();
+		initCounter = -1;
+	}
+
 	if (mShowGUI) {
 		// Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
 		ImGui::Begin("Skyrim Upscaler Settings", &mShowGUI, ImGuiWindowFlags_NoCollapse);  
@@ -101,12 +110,35 @@ void SettingGUI::OnRender()
 		if (ImGui::Checkbox("Enable", &SkyrimUpscaler::GetSingleton()->mEnableUpscaler)) {
 			SkyrimUpscaler::GetSingleton()->SetEnabled(SkyrimUpscaler::GetSingleton()->mEnableUpscaler);
 		}
-		ImGui::Checkbox("Disable Result Copying", &SkyrimUpscaler::GetSingleton()->mDisableResultCopying);
+		ImGui::Checkbox("Disable Evaluation", &SkyrimUpscaler::GetSingleton()->mDisableEvaluation);
+		ImGui::Checkbox("Cancel Jitter", &SkyrimUpscaler::GetSingleton()->mCancelJitter);
+		//ImGui::Checkbox("Blur Edges", &SkyrimUpscaler::GetSingleton()->mBlurEdges);
+		//ImGui::BeginDisabled(!SkyrimUpscaler::GetSingleton()->mBlurEdges);
+		//ImGui::DragFloat("Blur Intensity", &SkyrimUpscaler::GetSingleton()->mBlurIntensity, 0.1f, 0.0f, 10.0f);
+		//ImGui::EndDisabled();
+		ImGui::DragFloat("Blend Scale", &SkyrimUpscaler::GetSingleton()->mBlendScale, 0.1f, 0.0f, 10.0f);
 		ImGui::Checkbox("Jitter", &SkyrimUpscaler::GetSingleton()->mEnableJitter);
+		if (ImGui::ArrowButton("mJitterPhase-", ImGuiDir_Left)) {
+			SkyrimUpscaler::GetSingleton()->mJitterPhase--;
+		}
+		ImGui::SameLine(0, 4.0f);
+		if (ImGui::ArrowButton("mJitterPhase+", ImGuiDir_Right)) {
+			SkyrimUpscaler::GetSingleton()->mJitterPhase++;
+		}
+		ImGui::SameLine(0, 4.0f);
+		ImGui::DragInt("Jitter Phase Count", &SkyrimUpscaler::GetSingleton()->mJitterPhase, 1, 0, 128);
 		//ImGui::Checkbox("Enable Transparency Mask", &SkyrimUpscaler::GetSingleton()->mEnableTransparencyMask);
 		if (ImGui::Checkbox("Sharpness", &SkyrimUpscaler::GetSingleton()->mSharpening)) {
 			SkyrimUpscaler::GetSingleton()->InitUpscaler();
 		}
+		if (ImGui::ArrowButton("mSharpness-", ImGuiDir_Left)) {
+			SkyrimUpscaler::GetSingleton()->mSharpness -= 0.01f;
+		}
+		ImGui::SameLine(0, 4.0f);
+		if (ImGui::ArrowButton("mSharpness+", ImGuiDir_Right)) {
+			SkyrimUpscaler::GetSingleton()->mSharpness += 0.01f;
+		}
+		ImGui::SameLine(0, 4.0f);
 		ImGui::DragFloat("Sharpness Amount", &SkyrimUpscaler::GetSingleton()->mSharpness, 0.01f, 0.0f, 5.0f);
 
 		if (ImGui::Checkbox("Use Optimal Mip Lod Bias", &SkyrimUpscaler::GetSingleton()->mUseOptimalMipLodBias)) {
@@ -119,13 +151,97 @@ void SettingGUI::OnRender()
 		}
 		ImGui::BeginDisabled(SkyrimUpscaler::GetSingleton()->mUseOptimalMipLodBias);
 		ImGui::DragFloat("Mip Lod Bias", &SkyrimUpscaler::GetSingleton()->mMipLodBias, 0.1f, -3.0f, 3.0f);
+		if (ImGui::Button(" -2 ")) {
+			SkyrimUpscaler::GetSingleton()->mMipLodBias = -2;
+		}
+		ImGui::SameLine(0, 4.0f);
+		if (ImGui::Button(" -1.5 ")) {
+			SkyrimUpscaler::GetSingleton()->mMipLodBias = -1.5f;
+		}
+		ImGui::SameLine(0, 4.0f);
+		if (ImGui::Button(" -1 ")) {
+			SkyrimUpscaler::GetSingleton()->mMipLodBias = -1;
+		}
+		ImGui::SameLine(0, 4.0f);
+		if (ImGui::Button(" -0.5 ")) {
+			SkyrimUpscaler::GetSingleton()->mMipLodBias = -0.5f;
+		}
+		ImGui::SameLine(0, 4.0f);
+		if (ImGui::Button(" 0 ")) {
+			SkyrimUpscaler::GetSingleton()->mMipLodBias = 0;
+		}
 		ImGui::EndDisabled();
-
+		//ImGui::Spacing();
+		//if (ImGui::ArrowButton("mCancelScaleX-", ImGuiDir_Left)) {
+		//	SkyrimUpscaler::GetSingleton()->mCancelScaleX -= 0.01f;
+		//}
+		//ImGui::SameLine(0, 4.0f);
+		//if (ImGui::ArrowButton("mCancelScaleX+", ImGuiDir_Right)) {
+		//	SkyrimUpscaler::GetSingleton()->mCancelScaleX += 0.01f;
+		//}
+		//ImGui::SameLine(0, 4.0f);
+		//ImGui::DragFloat("Cancel Scale X", &SkyrimUpscaler::GetSingleton()->mCancelScaleX, 0.001f, 0.0f, 3.0f);
+		//ImGui::Spacing();
+		//if (ImGui::ArrowButton("mCancelScaleY-", ImGuiDir_Left)) {
+		//	SkyrimUpscaler::GetSingleton()->mCancelScaleY -= 0.01f;
+		//}
+		//ImGui::SameLine(0, 4.0f);
+		//if (ImGui::ArrowButton("mCancelScaleY+", ImGuiDir_Right)) {
+		//	SkyrimUpscaler::GetSingleton()->mCancelScaleY += 0.01f;
+		//}
+		//ImGui::SameLine(0, 4.0f);
+		//ImGui::DragFloat("Cancel Scale Y", &SkyrimUpscaler::GetSingleton()->mCancelScaleY, 0.001f, 0.0f, 3.0f);
 		ImGui::Spacing();
-		if (ImGui::DragFloat("Foveated Offset X", &SkyrimUpscaler::GetSingleton()->mFoveatedOffsetX, 0.001f, 0.0f, 1.0f)) {
+		if (ImGui::ArrowButton("mFoveatedScaleX-", ImGuiDir_Left)) {
+			SkyrimUpscaler::GetSingleton()->mFoveatedScaleX -= 0.01f;
+			initCounter = 25;
+		}
+		ImGui::SameLine(0, 4.0f);
+		if (ImGui::ArrowButton("mFoveatedScaleX+", ImGuiDir_Right)) {
+			SkyrimUpscaler::GetSingleton()->mFoveatedScaleX += 0.01f;
+			initCounter = 45;
+		}
+		ImGui::SameLine(0, 4.0f);
+		if (ImGui::DragFloat("Foveated Scale X", &SkyrimUpscaler::GetSingleton()->mFoveatedScaleX, 0.01f, 0.3f, 1.0f)) {
+			initCounter = 45;
+		}
+		if (ImGui::ArrowButton("mFoveatedScaleY-", ImGuiDir_Left)) {
+			SkyrimUpscaler::GetSingleton()->mFoveatedScaleY -= 0.01f;
+			initCounter = 45;
+		}
+		ImGui::SameLine(0, 4.0f);
+		if (ImGui::ArrowButton("mFoveatedScaleY+", ImGuiDir_Right)) {
+			SkyrimUpscaler::GetSingleton()->mFoveatedScaleY += 0.01f;
+			initCounter = 45;
+		}
+		ImGui::SameLine(0, 4.0f);
+		if (ImGui::DragFloat("Foveated Scale Y", &SkyrimUpscaler::GetSingleton()->mFoveatedScaleY, 0.01f, 0.3f, 1.0f)) {
+			initCounter = 45;
+		}
+		if (ImGui::ArrowButton("mFoveatedOffsetX-", ImGuiDir_Left)) {
+			SkyrimUpscaler::GetSingleton()->mFoveatedOffsetX -= 0.01f;
 			SkyrimUpscaler::GetSingleton()->SetupD3DBox(SkyrimUpscaler::GetSingleton()->mFoveatedOffsetX, SkyrimUpscaler::GetSingleton()->mFoveatedOffsetY);
 		}
-		if (ImGui::DragFloat("Foveated Offset Y", &SkyrimUpscaler::GetSingleton()->mFoveatedOffsetY, 0.001f, 0.0f, 1.0f)) {
+		ImGui::SameLine(0, 4.0f);
+		if (ImGui::ArrowButton("mFoveatedOffsetX+", ImGuiDir_Right)) {
+			SkyrimUpscaler::GetSingleton()->mFoveatedOffsetX += 0.01f;
+			SkyrimUpscaler::GetSingleton()->SetupD3DBox(SkyrimUpscaler::GetSingleton()->mFoveatedOffsetX, SkyrimUpscaler::GetSingleton()->mFoveatedOffsetY);
+		}
+		ImGui::SameLine(0, 4.0f);
+		if (ImGui::DragFloat("Foveated Offset X", &SkyrimUpscaler::GetSingleton()->mFoveatedOffsetX, 0.01f, -1.0f, 1.0f)) {
+			SkyrimUpscaler::GetSingleton()->SetupD3DBox(SkyrimUpscaler::GetSingleton()->mFoveatedOffsetX, SkyrimUpscaler::GetSingleton()->mFoveatedOffsetY);
+		}
+		if (ImGui::ArrowButton("mFoveatedOffsetY+", ImGuiDir_Left)) {
+			SkyrimUpscaler::GetSingleton()->mFoveatedOffsetY -= 0.01f;
+			SkyrimUpscaler::GetSingleton()->SetupD3DBox(SkyrimUpscaler::GetSingleton()->mFoveatedOffsetX, SkyrimUpscaler::GetSingleton()->mFoveatedOffsetY);
+		}
+		ImGui::SameLine(0, 4.0f);
+		if (ImGui::ArrowButton("mFoveatedOffsetY-", ImGuiDir_Right)) {
+			SkyrimUpscaler::GetSingleton()->mFoveatedOffsetY += 0.01f;
+			SkyrimUpscaler::GetSingleton()->SetupD3DBox(SkyrimUpscaler::GetSingleton()->mFoveatedOffsetX, SkyrimUpscaler::GetSingleton()->mFoveatedOffsetY);
+		}
+		ImGui::SameLine(0, 4.0f);
+		if (ImGui::DragFloat("Foveated Offset Y", &SkyrimUpscaler::GetSingleton()->mFoveatedOffsetY, 0.01f, -1.0f, 1.0f)) {
 			SkyrimUpscaler::GetSingleton()->SetupD3DBox(SkyrimUpscaler::GetSingleton()->mFoveatedOffsetX, SkyrimUpscaler::GetSingleton()->mFoveatedOffsetY);
 		}
 		ImGui::Spacing();

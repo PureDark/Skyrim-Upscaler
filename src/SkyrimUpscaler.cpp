@@ -1,8 +1,10 @@
 #include <SkyrimUpscaler.h>
 #include <PCH.h>
 #include <DRS.h>
-#include <hlsl/flip.vs.inc>
-#include <hlsl/flip.ps.inc>
+#include <hlsl/flip_vs.inc>
+#include <hlsl/cancel_jitter_ps.inc>
+#include <hlsl/blur_ps.inc>
+#include <hlsl/blend_ps.inc>
 
 #define GetSettingInt(a_section, a_setting, a_default) a_setting = (int)ini.GetLongValue(a_section, #a_setting, a_default);
 #define SetSettingInt(a_section, a_setting) ini.SetLongValue(a_section, #a_setting, a_setting);
@@ -27,7 +29,9 @@ void SkyrimUpscaler::LoadINI()
 	GetSettingFloat("Settings", mSharpness, 0);
 	mUpscaleType = std::clamp(mUpscaleType, 0, 3);
 	mQualityLevel = std::clamp(mQualityLevel, 0, 3);
-	GetSettingInt("Hotkeys", SettingGUI::GetSingleton()->mToggleHotkey, ImGuiKey_End);
+	int mToggleHotKey = 0;
+	GetSettingInt("Hotkeys", mToggleHotKey, ImGuiKey_End);
+	SettingGUI::GetSingleton()->mToggleHotkey = mToggleHotKey;
 
 	GetSettingFloat("FixedFoveatedUpscaling", mFoveatedScaleX, 0.67f);
 	GetSettingFloat("FixedFoveatedUpscaling", mFoveatedScaleY, 0.57f);
@@ -111,29 +115,65 @@ void SkyrimUpscaler::EvaluateUpscaler(ID3D11Resource* destTex)
 			if ((IsEnabled() && !DRS::GetSingleton()->reset) && (mUpscaleType != TAA)) {
 				// Apply DLSS only to a smaller rect to lower the cost
 				mContext->CopySubresourceRegion(mTempColorRect[0].mImage, 0, 0, 0, 0, mTargetTex.mImage, 0, &mSrcBox[0]);
-				mContext->CopySubresourceRegion(mDepthRect[0].mImage, 0, 0, 0, 0, mDepthBuffer.mImage, 0, &mSrcBox[0]);
+				mContext->CopyResource(mTempDepth.mImage, mDepthBuffer.mImage);
+				mContext->CopySubresourceRegion(mDepthRect[0].mImage, 0, 0, 0, 0, mTempDepth.mImage, 0, &mSrcBox[0]);
 				mContext->CopySubresourceRegion(mMotionVectorRect[0].mImage, 0, 0, 0, 0, mMotionVectors.mImage, 0, &mSrcBox[0]);
 				mContext->CopySubresourceRegion(mTempColorRect[1].mImage, 0, 0, 0, 0, mTargetTex.mImage, 0, &mSrcBox[1]);
-				mContext->CopySubresourceRegion(mDepthRect[1].mImage, 0, 0, 0, 0, mDepthBuffer.mImage, 0, &mSrcBox[1]);
+				mContext->CopySubresourceRegion(mDepthRect[1].mImage, 0, 0, 0, 0, mTempDepth.mImage, 0, &mSrcBox[1]);
 				mContext->CopySubresourceRegion(mMotionVectorRect[1].mImage, 0, 0, 0, 0, mMotionVectors.mImage, 0, &mSrcBox[1]);
 				int j = (mEnableJitter) ? 1 : 0;
-				if (!mDisableResultCopying) {
+				if (!mDisableEvaluation) {
 					float vFOV = GetVerticalFOVRad();
 					SimpleEvaluate(0, mTempColorRect[0].mImage, mMotionVectorRect[0].mImage, mDepthRect[0].mImage, nullptr, nullptr, mFoveatedRenderSizeX, mFoveatedRenderSizeY, mSharpness, 
 						mJitterOffsets[0] * j, mJitterOffsets[1] * j, mMotionScale[0], mMotionScale[1], false, g_fNear / 100, g_fFar / 100, vFOV);
 					SimpleEvaluate(1, mTempColorRect[1].mImage, mMotionVectorRect[1].mImage, mDepthRect[1].mImage, nullptr, nullptr, mFoveatedRenderSizeX, mFoveatedRenderSizeY, mSharpness,
 						mJitterOffsets[0] * j, mJitterOffsets[1] * j, mMotionScale[0], mMotionScale[1], false, g_fNear / 100, g_fFar / 100, vFOV);
-					static ImageWrapper dest = { (ID3D11Texture2D*)destTex };
+				}
+				static ImageWrapper dest = { (ID3D11Texture2D*)destTex };
+				mCustomConstants.jitterOffset[0] = mCancelScaleX * mJitterOffsets[0] / mRenderSizeX;
+				mCustomConstants.jitterOffset[1] = mCancelScaleY * mJitterOffsets[1] / mRenderSizeY;
+				mCustomConstants.dynamicResScale[0] = mRenderScale;
+				mCustomConstants.dynamicResScale[1] = mRenderScale;
+				mCustomConstants.screenSize[0] = mDisplaySizeX;
+				mCustomConstants.screenSize[1] = mDisplaySizeY;
+				mCustomConstants.blurIntensity = mBlurIntensity;
+				mCustomConstants.blendScale = mBlendScale;
+				if (mDisableEvaluation) {
+					mCustomConstants.leftRect[0] = 0;
+					mCustomConstants.leftRect[1] = 0;
+					mCustomConstants.leftRect[2] = 0;
+					mCustomConstants.leftRect[3] = 0;
+					mCustomConstants.rightRect[0] = 0;
+					mCustomConstants.rightRect[1] = 0;
+					mCustomConstants.rightRect[2] = 0;
+					mCustomConstants.rightRect[3] = 0;
+				} else {
+					mCustomConstants.leftRect[0] = mSrcBoxNorm[0].left;
+					mCustomConstants.leftRect[1] = mSrcBoxNorm[0].top;
+					mCustomConstants.leftRect[2] = mSrcBoxNorm[0].right;
+					mCustomConstants.leftRect[3] = mSrcBoxNorm[0].bottom;
+					mCustomConstants.rightRect[0] = mSrcBoxNorm[1].left;
+					mCustomConstants.rightRect[1] = mSrcBoxNorm[1].top;
+					mCustomConstants.rightRect[2] = mSrcBoxNorm[1].right;
+					mCustomConstants.rightRect[3] = mSrcBoxNorm[1].bottom;
+				}
+				mContext->UpdateSubresource(mConstantsBuffer, 0, NULL, &mCustomConstants, 0, 0);
+				mContext->PSSetConstantBuffers(0, 1, &mConstantsBuffer);
+				if (mCancelJitter) {
+					ID3D11ShaderResourceView* srvs[3] = { mTargetTex.GetSRV(), mAccumulateTex.GetSRV(), mMotionVectors.GetSRV() };
+					RenderTexture(0, 3, srvs, dest.GetRTV(), mDisplaySizeX, mDisplaySizeY);
+					mContext->CopyResource(mAccumulateTex.mImage, dest.mImage);
+				}
+				if (!mDisableEvaluation) {
+					mContext->CopySubresourceRegion(mTempColor.mImage, 0, mDstBox[0].left, mDstBox[0].top, 0, mOutColorRect[0].mImage, 0, NULL);
+					mContext->CopySubresourceRegion(mTempColor.mImage, 0, mDstBox[1].left, mDstBox[1].top, 0, mOutColorRect[1].mImage, 0, NULL);
+					ID3D11ShaderResourceView* srvs[1] = { mTempColor.GetSRV() };
+					RenderTexture(2, 1, srvs, dest.GetRTV(), mDisplaySizeX, mDisplaySizeY);
+				}
+				if (mBlurEdges) {
 					mContext->CopyResource(mTempColor.mImage, dest.mImage);
-					float color[4] = { 0, 0, 0, 0 };
-					mContext->ClearRenderTargetView(dest.GetRTV(), color);
-					mJitterConstants.jitterOffset[0] = mJitterOffsets[0] / mDisplaySizeX;
-					mJitterConstants.jitterOffset[1] = mJitterOffsets[1] / mDisplaySizeY;
-					mContext->UpdateSubresource(mConstantsBuffer, 0, NULL, &mJitterConstants, 0, 0);
-					mContext->PSSetConstantBuffers(0, 1, &mConstantsBuffer);
-					RenderTexture(mTempColor.GetSRV(), dest.GetRTV(), mDisplaySizeX, mDisplaySizeY);
-					mContext->CopySubresourceRegion(destTex, 0, mDstBox[0].left, mDstBox[0].top, 0, mOutColorRect[0].mImage, 0, &mOutBox);
-					mContext->CopySubresourceRegion(destTex, 0, mDstBox[1].left, mDstBox[1].top, 0, mOutColorRect[1].mImage, 0, &mOutBox);
+					ID3D11ShaderResourceView* srvs[1] = { mTempColor.GetSRV() };
+					RenderTexture(1, 1, srvs, dest.GetRTV(), mDisplaySizeX, mDisplaySizeY);
 				}
 			}
 		}
@@ -159,18 +199,21 @@ void SkyrimUpscaler::SetupD3DBox(float offsetX, float offsetY)
 	mSrcBox[1].front = 0;
 	mSrcBox[1].back = 1;
 
+	mSrcBoxNorm[0].left = ((1.0f - mFoveatedScaleX) / 2 + mFoveatedOffsetX) / 2;
+	mSrcBoxNorm[0].top = (1.0f - mFoveatedScaleY) / 2 + mFoveatedOffsetY;
+	mSrcBoxNorm[0].right = mSrcBoxNorm[0].left + mFoveatedScaleX / 2;
+	mSrcBoxNorm[0].bottom = mSrcBoxNorm[0].top + mFoveatedScaleY;
+
+	mSrcBoxNorm[1].left = ((1.0f - mFoveatedScaleX) / 2 - mFoveatedOffsetX) / 2 + 0.5f;
+	mSrcBoxNorm[1].top = mSrcBoxNorm[0].top;
+	mSrcBoxNorm[1].right = mSrcBoxNorm[1].left + mFoveatedScaleX / 2;
+	mSrcBoxNorm[1].bottom = mSrcBoxNorm[0].bottom;
+
 	renderX = (float)mDisplaySizeX / 2;
 	mDstBox[0].left = (renderX - mFoveatedDisplaySizeX) / 2 + mFoveatedOffsetX * renderX;
 	mDstBox[0].top = (mDisplaySizeY - mFoveatedDisplaySizeY) / 2 + mFoveatedOffsetY * mDisplaySizeY;
 	mDstBox[1].left = (renderX - mFoveatedDisplaySizeX) / 2 + renderX - mFoveatedOffsetX * renderX;
 	mDstBox[1].top = (mDisplaySizeY - mFoveatedDisplaySizeY) / 2 + mFoveatedOffsetY * mDisplaySizeY;
-
-	mOutBox.left = 0;
-	mOutBox.top = 0;
-	mOutBox.right = mFoveatedDisplaySizeX;
-	mOutBox.bottom = mFoveatedDisplaySizeY;
-	mOutBox.front = 0;
-	mOutBox.back = 1;
 }
 
 bool SkyrimUpscaler::IsEnabled()
@@ -181,10 +224,10 @@ bool SkyrimUpscaler::IsEnabled()
 
 void SkyrimUpscaler::GetJitters(float* out_x, float* out_y)
 {
-	const auto phase = GetJitterPhaseCount(0);
+	//const auto phase = GetJitterPhaseCount(0) / 2;
 
 	mJitterIndex++;
-	GetJitterOffset(out_x, out_y, mJitterIndex, phase);
+	GetJitterOffset(out_x, out_y, mJitterIndex, mJitterPhase);
 }
 
 void SkyrimUpscaler::SetJitterOffsets(float x, float y)
@@ -292,6 +335,17 @@ void SkyrimUpscaler::InitUpscaler()
 			desc.Height = mDisplaySizeY;
 			mDevice->CreateTexture2D(&desc, NULL, &mTempColor.mImage);
 		}
+		if (!mAccumulateTex.mImage) {
+			desc.Width = mDisplaySizeX;
+			desc.Height = mDisplaySizeY;
+			mDevice->CreateTexture2D(&desc, NULL, &mAccumulateTex.mImage);
+		}
+		if (!mTempDepth.mImage) {
+			D3D11_TEXTURE2D_DESC desc2;
+			mDepthBuffer.mImage->GetDesc(&desc2);
+			desc2.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+			mDevice->CreateTexture2D(&desc2, NULL, &mTempDepth.mImage);
+		}
 		ReleaseFoveatedResources();
 		mFoveatedRenderSizeX = mRenderSizeX * mFoveatedScaleX / 2;
 		mFoveatedRenderSizeY = mRenderSizeY * mFoveatedScaleY;
@@ -307,6 +361,7 @@ void SkyrimUpscaler::InitUpscaler()
 			mDepthBuffer.mImage->GetDesc(&desc2);
 			desc2.Width = mFoveatedRenderSizeX;
 			desc2.Height = mFoveatedRenderSizeY;
+			desc2.BindFlags = D3D11_BIND_SHADER_RESOURCE;
 			mDevice->CreateTexture2D(&desc2, NULL, &mDepthRect[0].mImage);
 			mDevice->CreateTexture2D(&desc2, NULL, &mDepthRect[1].mImage);
 		}
@@ -324,6 +379,7 @@ void SkyrimUpscaler::InitUpscaler()
 		SetMotionScaleY(0, mMotionScale[1]);
 		SetMotionScaleX(1, mMotionScale[0]);
 		SetMotionScaleY(1, mMotionScale[1]);
+		mJitterPhase = GetJitterPhaseCount(0);
 		if (mEnableUpscaler && mUpscaleType != DLAA) {
 			DRS::GetSingleton()->targetScaleFactor = mRenderScale;
 			DRS::GetSingleton()->ControlResolution();	
@@ -354,14 +410,16 @@ void SkyrimUpscaler::ReleaseFoveatedResources()
 
 void SkyrimUpscaler::InitShader()
 {
-	mDevice->CreateVertexShader(VS_Flip, sizeof(VS_Flip), nullptr, &mVertexShader);
-	mDevice->CreatePixelShader(PS_Flip, sizeof(PS_Flip), nullptr, &mPixelShader);
+	mDevice->CreateVertexShader(flip_vs, sizeof(flip_vs), nullptr, &mVertexShader);
+	mDevice->CreatePixelShader(cancel_jitter_ps, sizeof(cancel_jitter_ps), nullptr, &mPixelShader[0]);
+	mDevice->CreatePixelShader(blur_ps, sizeof(blur_ps), nullptr, &mPixelShader[1]);
+	mDevice->CreatePixelShader(blend_ps, sizeof(blend_ps), nullptr, &mPixelShader[2]);
 
 	D3D11_SAMPLER_DESC sd;
 	sd.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
-	sd.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
-	sd.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
-	sd.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+	sd.AddressU = D3D11_TEXTURE_ADDRESS_MIRROR;
+	sd.AddressV = D3D11_TEXTURE_ADDRESS_MIRROR;
+	sd.AddressW = D3D11_TEXTURE_ADDRESS_MIRROR;
 	sd.MipLODBias = 0;
 	sd.MaxAnisotropy = 1;
 	sd.ComparisonFunc = D3D11_COMPARISON_ALWAYS;
@@ -401,8 +459,8 @@ void SkyrimUpscaler::InitShader()
 
 	mDevice->CreateBlendState(&blendDesc, &mBlendState);
 
-	mJitterConstants.jitterOffset[0] = 0;
-	mJitterConstants.jitterOffset[1] = 0;
+	mCustomConstants.jitterOffset[0] = 0;
+	mCustomConstants.jitterOffset[1] = 0;
 
 	D3D11_BUFFER_DESC bd;
 	ZeroMemory(&bd, sizeof(D3D11_BUFFER_DESC));
@@ -411,30 +469,31 @@ void SkyrimUpscaler::InitShader()
 	bd.CPUAccessFlags = 0;
 	bd.MiscFlags = 0;
 	bd.StructureByteStride = 0;
-	bd.ByteWidth = 16;
+	bd.ByteWidth = sizeof(CustomConstants);
 	D3D11_SUBRESOURCE_DATA init;
 	ZeroMemory(&init, sizeof(D3D11_SUBRESOURCE_DATA));
 	init.SysMemPitch = 0;
 	init.SysMemSlicePitch = 0;
-	init.pSysMem = &mJitterConstants;
+	init.pSysMem = &mCustomConstants;
 	auto hr = mDevice->CreateBuffer(&bd, &init, &mConstantsBuffer);
 }
 
-void SkyrimUpscaler::RenderTexture(ID3D11ShaderResourceView* sourceTexture, ID3D11RenderTargetView* target, int width, int height)
+void SkyrimUpscaler::RenderTexture(int pixelShaderIndex, int numViews, ID3D11ShaderResourceView** inputSRV, ID3D11RenderTargetView* target, int width, int height, int topLeftX, int topLeftY)
 {
 	mContext->OMSetRenderTargets(1, &target, nullptr);
 	mContext->OMSetBlendState(mBlendState, nullptr, 0xffffffff);
 	mContext->OMSetDepthStencilState(nullptr, 0);
 	mContext->VSSetShader(mVertexShader, nullptr, 0);
-	mContext->PSSetShader(mPixelShader, nullptr, 0);
-	mContext->PSSetShaderResources(0, 1, &sourceTexture);
+	mContext->PSSetShader(mPixelShader[pixelShaderIndex], nullptr, 0);
+	mContext->PSSetShaderResources(0, numViews, inputSRV);
 	mContext->PSSetSamplers(0, 1, &mSampler);
 	mContext->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
 	mContext->IASetVertexBuffers(0, 0, nullptr, nullptr, nullptr);
 	mContext->IASetInputLayout(nullptr);
 	mContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	D3D11_VIEWPORT vp;
-	vp.TopLeftX = vp.TopLeftY = 0;
+	vp.TopLeftX = topLeftX;
+	vp.TopLeftY = topLeftY;
 	vp.Width = width;
 	vp.Height = height;
 	vp.MinDepth = 0;
