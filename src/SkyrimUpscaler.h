@@ -108,6 +108,24 @@ public:
 	}
 };
 
+struct MenuScreenData
+{
+	uint32_t unk00;         // 00
+	float    mouseX;        // 04
+	float    mouseY;        // 08
+	uint32_t unk0C;         // 0C
+	uint32_t unk10;         // 10
+	float    screenWidth;   // 14
+	float    screenHeight;  // 18
+	uint32_t unk1C;         // 1C
+	uint64_t unk20;         // 20
+	uint64_t unk28;         // 28
+};
+static_assert(sizeof(MenuScreenData) == 0x30);
+
+const float Deg2Rad = 0.0174532924f;
+const float Rad2Deg = 57.29578f;
+
 class SkyrimUpscaler
 {
 public:
@@ -127,6 +145,9 @@ public:
 	int   mUpscaleType{ 0 };
 	int   mQualityLevel{ 0 };
 	float mMipLodBias{ 0 };
+	float mFOV{ 70 };
+	float mFarPlane{ 1000 };
+	float mNearPlane{ 0.3f };
 
 	bool mDisableResultCopying{ false };
 	bool mUseOptimalMipLodBias{ true };
@@ -155,6 +176,7 @@ public:
 	void MessageHandler(SKSE::MessagingInterface::Message* a_msg);
 
 	float GetVerticalFOVRad();
+	void  SetupCameraData();
 	void  EvaluateUpscaler();
 	void  ForceEvaluateUpscaler(ID3D11Texture2D* color, ID3D11Texture2D* dest);
 

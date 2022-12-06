@@ -140,6 +140,11 @@ void SettingGUI::OnRender()
 			SkyrimUpscaler::GetSingleton()->InitUpscaler();
 		}
 		ImGui::EndDisabled();
+		//if (SkyrimUpscaler::GetSingleton()->mUpscaleType == FSR2) {
+		//	ImGui::DragFloat("FOV", &SkyrimUpscaler::GetSingleton()->mFOV, 0.1f, 0.0f, 150.0f);
+		//	ImGui::DragFloat("Near Plane", &SkyrimUpscaler::GetSingleton()->mNearPlane, 0.1f, 0.0f, 300.0f);
+		//	ImGui::DragFloat("Far Plane", &SkyrimUpscaler::GetSingleton()->mFarPlane, 1.0f, 300.0f, 10000.0f);
+		//}
 
 		const auto w = (float)GetRenderWidth(0);
 		const auto h = (float)GetRenderHeight(0);

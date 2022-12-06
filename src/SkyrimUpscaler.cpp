@@ -87,17 +87,22 @@ float SkyrimUpscaler::GetVerticalFOVRad()
 	return vFOV;
 }
 
+void SkyrimUpscaler::SetupCameraData()
+{
+	//static float& g_fNear = (*(float*)(RELOCATION_ID(517032, 403540).address() + 0x40));  // 2F26FC0, 2FC1A90
+	//static float& g_fFar = (*(float*)(RELOCATION_ID(517032, 403540).address() + 0x44));   // 2F26FC4, 2FC1A94
+	mFOV = GetVerticalFOVRad();
+	mNearPlane = 0.1f;
+	mFarPlane = 1000.0f;
+}
+
 void SkyrimUpscaler::EvaluateUpscaler()
 {
-	static float&      g_fNear = (*(float*)(RELOCATION_ID(517032, 403540).address() + 0x40));  // 2F26FC0, 2FC1A90
-	static float&      g_fFar = (*(float*)(RELOCATION_ID(517032, 403540).address() + 0x44));   // 2F26FC4, 2FC1A94
-	static bool        lastEnable = false;
-
+	static bool lastEnable = false;
 	if (mSwapChain != nullptr) {
 		ID3D11Texture2D* back_buffer;
 		mSwapChain->GetBuffer(0, IID_PPV_ARGS(&back_buffer));
 		if (back_buffer != nullptr && mDepthBuffer.mImage != nullptr && mMotionVectors.mImage != nullptr) {
-			ID3D11Texture2D* motionVectorTex = (RE::UI::GetSingleton()->GameIsPaused() ? mMotionVectorsEmpty.mImage : mMotionVectors.mImage);
 			bool             enable = IsEnabled();
 			bool             delayOneFrame = (lastEnable && !enable);
 			bool             TAAEnabled = (mUpscaleType == TAA);
@@ -109,8 +114,9 @@ void SkyrimUpscaler::EvaluateUpscaler()
 				context->CopyResource(mTempColor.mImage, back_buffer);
 				int j = (mEnableJitter) ? 1 : 0;
 				if (!mDisableResultCopying) {
-					SimpleEvaluate(0, mTempColor.mImage, motionVectorTex, mDepthBuffer.mImage, nullptr, back_buffer, mRenderSizeX, mRenderSizeY, mSharpness, 
-						mJitterOffsets[0] * j, mJitterOffsets[1] * j, mMotionScale[0], mMotionScale[1], false, g_fNear / 100, g_fFar / 100, GetVerticalFOVRad());
+					SimpleEvaluate(0, mTempColor.mImage, mMotionVectors.mImage, mDepthBuffer.mImage, nullptr, back_buffer, mRenderSizeX, mRenderSizeY, mSharpness, 
+						mJitterOffsets[0] * j, mJitterOffsets[1] * j, mMotionScale[0], mMotionScale[1], false, mNearPlane, mFarPlane, mFOV);
+					context->CopyResource(mMotionVectors.mImage, mMotionVectorsEmpty.mImage);
 				}
 			}
 		}
@@ -119,17 +125,14 @@ void SkyrimUpscaler::EvaluateUpscaler()
 
 void SkyrimUpscaler::ForceEvaluateUpscaler(ID3D11Texture2D* color, ID3D11Texture2D* dest)
 {
-	static float&      g_fNear = (*(float*)(RELOCATION_ID(517032, 403540).address() + 0x40));  // 2F26FC0, 2FC1A90
-	static float&      g_fFar = (*(float*)(RELOCATION_ID(517032, 403540).address() + 0x44));   // 2F26FC4, 2FC1A94
 	static bool        lastEnable = false;
 
 	if (mDepthBuffer.mImage != nullptr && mMotionVectors.mImage != nullptr) {
-		ID3D11Texture2D*     motionVectorTex = (RE::UI::GetSingleton()->GameIsPaused() ? mMotionVectorsEmpty.mImage : mMotionVectors.mImage);
 		ID3D11DeviceContext* context;
 		mDevice->GetImmediateContext(&context);
 		if (!mDisableResultCopying) {
-			SimpleEvaluate(0, color, motionVectorTex, mDepthBuffer.mImage, nullptr, dest, mRenderSizeX, mRenderSizeY, mSharpness,
-				mJitterOffsets[0], mJitterOffsets[1], mMotionScale[0], mMotionScale[1], false, g_fNear / 100, g_fFar / 100, GetVerticalFOVRad());
+			SimpleEvaluate(0, color, mMotionVectors.mImage, mDepthBuffer.mImage, nullptr, dest, mRenderSizeX, mRenderSizeY, mSharpness,
+				mJitterOffsets[0], mJitterOffsets[1], mMotionScale[0], mMotionScale[1], false, mNearPlane, mFarPlane, mFOV);
 			context->CopyResource(mMotionVectors.mImage, mMotionVectorsEmpty.mImage);
 		}
 	}
@@ -254,6 +257,7 @@ void SkyrimUpscaler::InitUpscaler()
 			mMipLodBias = 0;
 		}
 		UnkOuterStruct::GetSingleton()->SetTAA(false);
+		SetupCameraData();
 	} else {
 		DRS::GetSingleton()->targetScaleFactor = 1.0f;
 		DRS::GetSingleton()->ControlResolution();

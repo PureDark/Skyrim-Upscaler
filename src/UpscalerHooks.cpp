@@ -203,6 +203,7 @@ void WINAPI hk_ID3D11DeviceContext_CSSetSamplers(ID3D11DeviceContext* This, UINT
 HRESULT WINAPI hk_IDXGIFactory_CreateSwapChain(IDXGIFactory2* This, _In_ IUnknown* pDevice, _In_ DXGI_SWAP_CHAIN_DESC* pDesc, _COM_Outptr_ IDXGISwapChain** ppSwapChain)
 {
 	auto hr = (This->*ptrCreateSwapChain)(pDevice, pDesc, ppSwapChain);
+	logger::info("hk_IDXGIFactory_CreateSwapChain created original SwapChain : {} x {} Format: {}", pDesc->BufferDesc.Width, pDesc->BufferDesc.Height, pDesc->BufferDesc.Format);
 	static bool init = false;
 	if (!init) {
 		init = true;
