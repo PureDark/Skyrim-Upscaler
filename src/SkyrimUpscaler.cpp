@@ -105,29 +105,52 @@ float SkyrimUpscaler::GetVerticalFOVRad()
 	return vFOV;
 }
 
-void SkyrimUpscaler::EvaluateUpscaler(ID3D11Resource* destTex)
+UpscaleParams SkyrimUpscaler::GetUpscaleParams(int id, void* color, void* motionVector, void* depth, void* mask, void* destination, int renderSizeX, int renderSizeY, float sharpness,
+	float jitterOffsetX, float jitterOffsetY, int motionScaleX, int motionScaleY, bool reset, float nearPlane, float farPlane, float verticalFOV, bool execute) 
 {
-	static float&      g_fNear = (*(float*)(RELOCATION_ID(517032, 403540).address() + 0x40));  // 2F26FC0, 2FC1A90
-	static float&      g_fFar = (*(float*)(RELOCATION_ID(517032, 403540).address() + 0x44));   // 2F26FC4, 2FC1A94
+	UpscaleParams params;
+	params.id = id;
+	params.color = color;
+	params.motionVector = motionVector;
+	params.depth = depth;
+	params.mask = mask;
+	params.destination = destination;
+	params.renderSizeX = renderSizeX;
+	params.renderSizeY = renderSizeY;
+	params.sharpness = sharpness;
+	params.jitterOffsetX = jitterOffsetX;
+	params.jitterOffsetY = jitterOffsetY;
+	params.motionScaleX = motionScaleX;
+	params.motionScaleY = motionScaleY;
+	params.reset = reset;
+	params.nearPlane = nearPlane;
+	params.farPlane = farPlane;
+	params.verticalFOV = verticalFOV;
+	params.execute = execute;
+	return params;
+}
 
+void SkyrimUpscaler::Evaluate(ID3D11Resource* destTex)
+{
 	if (mSwapChain != nullptr) {
 		if (mTargetTex.mImage != nullptr && mDepthBuffer.mImage != nullptr && mMotionVectors.mImage != nullptr) {
 			if ((IsEnabled() && !DRS::GetSingleton()->reset) && (mUpscaleType != TAA)) {
-				// Apply DLSS only to a smaller rect to lower the cost
-				mContext->CopySubresourceRegion(mTempColorRect[0].mImage, 0, 0, 0, 0, mTargetTex.mImage, 0, &mSrcBox[0]);
-				mContext->CopyResource(mTempDepth.mImage, mDepthBuffer.mImage);
-				mContext->CopySubresourceRegion(mDepthRect[0].mImage, 0, 0, 0, 0, mTempDepth.mImage, 0, &mSrcBox[0]);
-				mContext->CopySubresourceRegion(mMotionVectorRect[0].mImage, 0, 0, 0, 0, mMotionVectors.mImage, 0, &mSrcBox[0]);
-				mContext->CopySubresourceRegion(mTempColorRect[1].mImage, 0, 0, 0, 0, mTargetTex.mImage, 0, &mSrcBox[1]);
-				mContext->CopySubresourceRegion(mDepthRect[1].mImage, 0, 0, 0, 0, mTempDepth.mImage, 0, &mSrcBox[1]);
-				mContext->CopySubresourceRegion(mMotionVectorRect[1].mImage, 0, 0, 0, 0, mMotionVectors.mImage, 0, &mSrcBox[1]);
-				int j = (mEnableJitter) ? 1 : 0;
 				if (!mDisableEvaluation) {
 					float vFOV = GetVerticalFOVRad();
-					SimpleEvaluate(0, mTempColorRect[0].mImage, mMotionVectorRect[0].mImage, mDepthRect[0].mImage, nullptr, nullptr, mFoveatedRenderSizeX, mFoveatedRenderSizeY, mSharpness, 
-						mJitterOffsets[0] * j, mJitterOffsets[1] * j, mMotionScale[0], mMotionScale[1], false, g_fNear / 100, g_fFar / 100, vFOV);
-					SimpleEvaluate(1, mTempColorRect[1].mImage, mMotionVectorRect[1].mImage, mDepthRect[1].mImage, nullptr, nullptr, mFoveatedRenderSizeX, mFoveatedRenderSizeY, mSharpness,
-						mJitterOffsets[0] * j, mJitterOffsets[1] * j, mMotionScale[0], mMotionScale[1], false, g_fNear / 100, g_fFar / 100, vFOV);
+					UpscaleParams params = GetUpscaleParams(0, mTargetTex.mImage, mMotionVectors.mImage, mDepthBuffer.mImage, nullptr, nullptr, mFoveatedRenderSizeX, mFoveatedRenderSizeY, mSharpness,
+						mJitterOffsets[0], mJitterOffsets[1], mMotionScale[0], mMotionScale[1], false, 0.1f, 1000.0f, vFOV, mUpscaleType==DLSS);
+					UpscaleParams params2 = GetUpscaleParams(1, mTargetTex.mImage, mMotionVectors.mImage, mDepthBuffer.mImage, nullptr, nullptr, mFoveatedRenderSizeX, mFoveatedRenderSizeY, mSharpness,
+						mJitterOffsets[0], mJitterOffsets[1], mMotionScale[0], mMotionScale[1], false, 0.1f, 1000.0f, vFOV, true);
+					if (!mDebug2) {
+						params.colorBase = { mSrcBox[0].left, mSrcBox[0].top };
+						params2.colorBase = { mSrcBox[1].left, mSrcBox[1].top };
+						params.depthBase = { mSrcBox[0].left, mSrcBox[0].top };
+						params2.depthBase = { mSrcBox[1].left, mSrcBox[1].top };
+						params.motionBase = { mSrcBox[0].left, mSrcBox[0].top };
+						params2.motionBase = { mSrcBox[1].left, mSrcBox[1].top };
+					}
+					EvaluateUpscaler(&params);
+					EvaluateUpscaler(&params2);
 				}
 				static ImageWrapper dest = { (ID3D11Texture2D*)destTex };
 				mCustomConstants.jitterOffset[0] = mCancelScaleX * mJitterOffsets[0] / mRenderSizeX;
@@ -165,16 +188,23 @@ void SkyrimUpscaler::EvaluateUpscaler(ID3D11Resource* destTex)
 					mContext->CopyResource(mAccumulateTex.mImage, dest.mImage);
 				}
 				if (!mDisableEvaluation) {
-					mContext->CopySubresourceRegion(mTempColor.mImage, 0, mDstBox[0].left, mDstBox[0].top, 0, mOutColorRect[0].mImage, 0, NULL);
-					mContext->CopySubresourceRegion(mTempColor.mImage, 0, mDstBox[1].left, mDstBox[1].top, 0, mOutColorRect[1].mImage, 0, NULL);
-					ID3D11ShaderResourceView* srvs[1] = { mTempColor.GetSRV() };
-					RenderTexture(2, 1, srvs, dest.GetRTV(), mDisplaySizeX, mDisplaySizeY);
+					if (mDebug) {
+						mContext->CopySubresourceRegion(destTex, 0, mDstBox[0].left, mDstBox[0].top, 0, mOutColorRect[0].mImage, 0, NULL);
+						mContext->CopySubresourceRegion(destTex, 0, mDstBox[1].left, mDstBox[1].top, 0, mOutColorRect[1].mImage, 0, NULL);
+					} else {
+						mContext->CopySubresourceRegion(mTempColor.mImage, 0, mDstBox[0].left, mDstBox[0].top, 0, mOutColorRect[0].mImage, 0, NULL);
+						mContext->CopySubresourceRegion(mTempColor.mImage, 0, mDstBox[1].left, mDstBox[1].top, 0, mOutColorRect[1].mImage, 0, NULL);
+						ID3D11ShaderResourceView* srvs[1] = { mTempColor.GetSRV() };
+						RenderTexture(2, 1, srvs, dest.GetRTV(), mDisplaySizeX, mDisplaySizeY);
+					}
 				}
 				if (mBlurEdges) {
 					mContext->CopyResource(mTempColor.mImage, dest.mImage);
 					ID3D11ShaderResourceView* srvs[1] = { mTempColor.GetSRV() };
 					RenderTexture(1, 1, srvs, dest.GetRTV(), mDisplaySizeX, mDisplaySizeY);
 				}
+				float color[4] = { 0, 0, 0, 1 };
+				mContext->ClearRenderTargetView(mTargetTex.GetRTV(), color);
 			}
 		}
 	}
@@ -250,12 +280,14 @@ void SkyrimUpscaler::SetEnabled(bool enabled)
 	if (mEnableUpscaler && mUpscaleType != TAA) {
 		DRS::GetSingleton()->targetScaleFactor = mRenderScale;
 		DRS::GetSingleton()->ControlResolution();
-		mMipLodBias = (mUpscaleType==DLAA)?0:GetOptimalMipmapBias(0);
+		if (mUseOptimalMipLodBias)
+			mMipLodBias = (mUpscaleType==DLAA)?0:GetOptimalMipmapBias(0);
 		UnkOuterStruct::GetSingleton()->SetTAA(false);
 	} else {
 		DRS::GetSingleton()->targetScaleFactor = 1.0f;
 		DRS::GetSingleton()->ControlResolution();
-		mMipLodBias = 0;
+		if (mUseOptimalMipLodBias)
+			mMipLodBias = 0;
 		UnkOuterStruct::GetSingleton()->SetTAA(mEnableUpscaler && mUpscaleType == TAA);
 	}
 }
@@ -382,18 +414,21 @@ void SkyrimUpscaler::InitUpscaler()
 		mJitterPhase = GetJitterPhaseCount(0);
 		if (mEnableUpscaler && mUpscaleType != DLAA) {
 			DRS::GetSingleton()->targetScaleFactor = mRenderScale;
-			DRS::GetSingleton()->ControlResolution();	
-			mMipLodBias = GetOptimalMipmapBias(0);
+			DRS::GetSingleton()->ControlResolution();
+			if (mUseOptimalMipLodBias)
+				mMipLodBias = GetOptimalMipmapBias(0);
 		} else {
 			DRS::GetSingleton()->targetScaleFactor = 1.0f;
 			DRS::GetSingleton()->ControlResolution();
-			mMipLodBias = 0;
+			if (mUseOptimalMipLodBias)
+				mMipLodBias = 0;
 		}
 		UnkOuterStruct::GetSingleton()->SetTAA(false);
 	} else {
 		DRS::GetSingleton()->targetScaleFactor = 1.0f;
 		DRS::GetSingleton()->ControlResolution();
-		mMipLodBias = 0;
+		if (mUseOptimalMipLodBias)
+			mMipLodBias = 0;
 		UnkOuterStruct::GetSingleton()->SetTAA(mEnableUpscaler);
 	}
 }

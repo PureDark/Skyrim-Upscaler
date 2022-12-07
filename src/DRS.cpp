@@ -19,6 +19,8 @@ void DRS::SetDRSVR(float renderScale)
 {
 	if (renderScale == 0)
 		renderScale = currentScaleFactor;
+	if (SkyrimUpscaler::GetSingleton()->mDebug)
+		renderScale = 0.5f;
 	auto currentWidthRatio = reinterpret_cast<float*>(REL::Offset(0x3186d14).address());
 	auto currentHeightRatio = reinterpret_cast<float*>(REL::Offset(0x3186d18).address());
 	auto previousWidthRatio = reinterpret_cast<float*>(REL::Offset(0x3186d1c).address());

@@ -111,7 +111,13 @@ void SettingGUI::OnRender()
 			SkyrimUpscaler::GetSingleton()->SetEnabled(SkyrimUpscaler::GetSingleton()->mEnableUpscaler);
 		}
 		ImGui::Checkbox("Disable Evaluation", &SkyrimUpscaler::GetSingleton()->mDisableEvaluation);
-		ImGui::Checkbox("Cancel Jitter", &SkyrimUpscaler::GetSingleton()->mCancelJitter);
+		ImGui::Checkbox("Cancel Jitter(0.3ms)", &SkyrimUpscaler::GetSingleton()->mCancelJitter);
+		ImGui::Checkbox("Debug", &SkyrimUpscaler::GetSingleton()->mDebug);
+		ImGui::Checkbox("Debug2", &SkyrimUpscaler::GetSingleton()->mDebug2);
+		ImGui::Checkbox("Debug3", &SkyrimUpscaler::GetSingleton()->mDebug3);
+		ImGui::Checkbox("Debug4", &SkyrimUpscaler::GetSingleton()->mDebug4);
+		ImGui::Checkbox("Debug5", &SkyrimUpscaler::GetSingleton()->mDebug5);
+		ImGui::Checkbox("Debug6", &SkyrimUpscaler::GetSingleton()->mDebug6);
 		//ImGui::Checkbox("Blur Edges", &SkyrimUpscaler::GetSingleton()->mBlurEdges);
 		//ImGui::BeginDisabled(!SkyrimUpscaler::GetSingleton()->mBlurEdges);
 		//ImGui::DragFloat("Blur Intensity", &SkyrimUpscaler::GetSingleton()->mBlurIntensity, 0.1f, 0.0f, 10.0f);

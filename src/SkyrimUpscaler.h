@@ -152,6 +152,12 @@ public:
 	bool mEnableTransparencyMask{ false };
 	bool mCancelJitter{ true };
 	bool mBlurEdges{ false };
+	bool mDebug{ false };
+	bool mDebug2{ false };
+	bool mDebug3{ false };
+	bool mDebug4{ false };
+	bool mDebug5{ false };
+	bool mDebug6{ false };
 
 	float mCancelScaleX{ 0.5f };
 	float mCancelScaleY{ 0.5f };
@@ -211,7 +217,9 @@ public:
 	void MessageHandler(SKSE::MessagingInterface::Message* a_msg);
 
 	float GetVerticalFOVRad();
-	void  EvaluateUpscaler(ID3D11Resource* destTex = nullptr);
+	void  Evaluate(ID3D11Resource* destTex = nullptr);
+	UpscaleParams GetUpscaleParams(int id, void* color, void* motionVector, void* depth, void* mask, void* destination, int renderSizeX, int renderSizeY, float sharpness,
+		float jitterOffsetX, float jitterOffsetY, int motionScaleX, int motionScaleY, bool reset, float nearPlane, float farPlane, float verticalFOV, bool execute = true);
 
 	bool IsEnabled();
 

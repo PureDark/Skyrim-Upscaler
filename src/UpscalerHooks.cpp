@@ -227,7 +227,9 @@ HRESULT WINAPI hk_D3D11CreateDeviceAndSwapChain(
 	auto device = *ppDevice;
 	auto deviceContext = *ppImmediateContext;
 	auto swapChain = *ppSwapChain;
-	SkyrimUpscaler::GetSingleton()->SetupSwapChain(swapChain);
+	IDXGISwapChain2* unwrappedSwapChain;
+	swapChain->QueryInterface(IID_PPV_ARGS(&unwrappedSwapChain));
+	SkyrimUpscaler::GetSingleton()->SetupSwapChain(unwrappedSwapChain);
 	SkyrimUpscaler::GetSingleton()->PreInit();
 	SettingGUI::GetSingleton()->InitIMGUI(swapChain, device, deviceContext);
 	InitLogDelegate(MyLog);
@@ -275,7 +277,7 @@ struct UpscalerHooks
 					SkyrimUpscaler::GetSingleton()->SetupTarget(targetTex);
 				}
 			}
-			SkyrimUpscaler::GetSingleton()->EvaluateUpscaler();
+			SkyrimUpscaler::GetSingleton()->Evaluate();
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
@@ -312,8 +314,8 @@ struct UpscalerHooks
 					DSV->GetResource(&DepthTex);
 			}
 			if (SkyrimUpscaler::GetSingleton()->IsEnabled()) {
-				SkyrimUpscaler::GetSingleton()->EvaluateUpscaler(TargetTex);
-				SkyrimUpscaler::GetSingleton()->mContext->CopyResource(SkyrimUpscaler::GetSingleton()->mDepthBuffer.mImage, DepthTex);
+				SkyrimUpscaler::GetSingleton()->Evaluate(TargetTex);
+				//SkyrimUpscaler::GetSingleton()->mContext->CopyResource(SkyrimUpscaler::GetSingleton()->mDepthBuffer.mImage, DepthTex);
 			}
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
