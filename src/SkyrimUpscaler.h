@@ -151,6 +151,7 @@ public:
 
 	bool mDisableResultCopying{ false };
 	bool mUseOptimalMipLodBias{ true };
+	bool mDebug{ false };
 
 	ImageWrapper     mTempColor;
 	ImageWrapper     mOutColor;

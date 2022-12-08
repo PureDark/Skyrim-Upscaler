@@ -216,6 +216,7 @@ void SkyrimUpscaler::PreInit()
 
 void SkyrimUpscaler::InitUpscaler()
 {
+	SetDebug(mDebug);
 	ID3D11Texture2D* back_buffer;
 	mSwapChain->GetBuffer(0, IID_PPV_ARGS(&back_buffer));
 	D3D11_TEXTURE2D_DESC desc;

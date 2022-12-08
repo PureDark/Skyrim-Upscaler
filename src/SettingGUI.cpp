@@ -96,7 +96,12 @@ void SettingGUI::OnRender()
 		}
 		ImGui::Checkbox("Disable Result Copying", &SkyrimUpscaler::GetSingleton()->mDisableResultCopying);
 		ImGui::Checkbox("Jitter", &SkyrimUpscaler::GetSingleton()->mEnableJitter);
+		if (ImGui::Checkbox("Debug", &SkyrimUpscaler::GetSingleton()->mDebug)) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			SkyrimUpscaler::GetSingleton()->InitUpscaler();
+		}
 		if (ImGui::Checkbox("Sharpness", &SkyrimUpscaler::GetSingleton()->mSharpening)) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 			SkyrimUpscaler::GetSingleton()->InitUpscaler();
 		}
 		ImGui::DragFloat("Sharpness Amount", &SkyrimUpscaler::GetSingleton()->mSharpness, 0.01f, -5.0f, 5.0f);
