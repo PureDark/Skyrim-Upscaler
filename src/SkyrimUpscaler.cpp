@@ -130,7 +130,7 @@ UpscaleParams SkyrimUpscaler::GetUpscaleParams(int id, void* color, void* motion
 	return params;
 }
 
-void SkyrimUpscaler::Evaluate(ID3D11Resource* destTex)
+void SkyrimUpscaler::Evaluate(ID3D11Resource* destTex, ID3D11DepthStencilView* dsv)
 {
 	if (mSwapChain != nullptr) {
 		if (mTargetTex.mImage != nullptr && mDepthBuffer.mImage != nullptr && mMotionVectors.mImage != nullptr) {
@@ -138,23 +138,21 @@ void SkyrimUpscaler::Evaluate(ID3D11Resource* destTex)
 				if (!mDisableEvaluation) {
 					float vFOV = GetVerticalFOVRad();
 					UpscaleParams params = GetUpscaleParams(0, mTargetTex.mImage, mMotionVectors.mImage, mDepthBuffer.mImage, nullptr, nullptr, mFoveatedRenderSizeX, mFoveatedRenderSizeY, mSharpness,
-						mJitterOffsets[0], mJitterOffsets[1], mMotionScale[0], mMotionScale[1], false, 0.1f, 1000.0f, vFOV, mUpscaleType==DLSS);
+						mJitterOffsets[0], mJitterOffsets[1], mMotionScale[0], mMotionScale[1], false, 0.1f, 1000.0f, vFOV, mUpscaleType == DLSS);
 					UpscaleParams params2 = GetUpscaleParams(1, mTargetTex.mImage, mMotionVectors.mImage, mDepthBuffer.mImage, nullptr, nullptr, mFoveatedRenderSizeX, mFoveatedRenderSizeY, mSharpness,
 						mJitterOffsets[0], mJitterOffsets[1], mMotionScale[0], mMotionScale[1], false, 0.1f, 1000.0f, vFOV, true);
-					if (!mDebug2) {
-						params.colorBase = { mSrcBox[0].left, mSrcBox[0].top };
-						params2.colorBase = { mSrcBox[1].left, mSrcBox[1].top };
-						params.depthBase = { mSrcBox[0].left, mSrcBox[0].top };
-						params2.depthBase = { mSrcBox[1].left, mSrcBox[1].top };
-						params.motionBase = { mSrcBox[0].left, mSrcBox[0].top };
-						params2.motionBase = { mSrcBox[1].left, mSrcBox[1].top };
-					}
+					params.colorBase = { mSrcBox[0].left, mSrcBox[0].top };
+					params2.colorBase = { mSrcBox[1].left, mSrcBox[1].top };
+					params.depthBase = { mSrcBox[0].left, mSrcBox[0].top };
+					params2.depthBase = { mSrcBox[1].left, mSrcBox[1].top };
+					params.motionBase = { mSrcBox[0].left, mSrcBox[0].top };
+					params2.motionBase = { mSrcBox[1].left, mSrcBox[1].top };
 					EvaluateUpscaler(&params);
 					EvaluateUpscaler(&params2);
 				}
 				static ImageWrapper dest = { (ID3D11Texture2D*)destTex };
-				mCustomConstants.jitterOffset[0] = mCancelScaleX * mJitterOffsets[0] / mRenderSizeX;
-				mCustomConstants.jitterOffset[1] = mCancelScaleY * mJitterOffsets[1] / mRenderSizeY;
+				mCustomConstants.jitterOffset[0] = 0.5f * mJitterOffsets[0] / mRenderSizeX;
+				mCustomConstants.jitterOffset[1] = 0.5f * mJitterOffsets[1] / mRenderSizeY;
 				mCustomConstants.dynamicResScale[0] = mRenderScale;
 				mCustomConstants.dynamicResScale[1] = mRenderScale;
 				mCustomConstants.screenSize[0] = mDisplaySizeX;
@@ -184,7 +182,7 @@ void SkyrimUpscaler::Evaluate(ID3D11Resource* destTex)
 				mContext->PSSetConstantBuffers(0, 1, &mConstantsBuffer);
 				if (mCancelJitter) {
 					ID3D11ShaderResourceView* srvs[3] = { mTargetTex.GetSRV(), mAccumulateTex.GetSRV(), mMotionVectors.GetSRV() };
-					RenderTexture(0, 3, srvs, dest.GetRTV(), mDisplaySizeX, mDisplaySizeY);
+					RenderTexture(0, 3, srvs, dsv, dest.GetRTV(), mDisplaySizeX, mDisplaySizeY);
 					mContext->CopyResource(mAccumulateTex.mImage, dest.mImage);
 				}
 				if (!mDisableEvaluation) {
@@ -195,13 +193,13 @@ void SkyrimUpscaler::Evaluate(ID3D11Resource* destTex)
 						mContext->CopySubresourceRegion(mTempColor.mImage, 0, mDstBox[0].left, mDstBox[0].top, 0, mOutColorRect[0].mImage, 0, NULL);
 						mContext->CopySubresourceRegion(mTempColor.mImage, 0, mDstBox[1].left, mDstBox[1].top, 0, mOutColorRect[1].mImage, 0, NULL);
 						ID3D11ShaderResourceView* srvs[1] = { mTempColor.GetSRV() };
-						RenderTexture(2, 1, srvs, dest.GetRTV(), mDisplaySizeX, mDisplaySizeY);
+						RenderTexture(2, 1, srvs, dsv, dest.GetRTV(), mDisplaySizeX, mDisplaySizeY);
 					}
 				}
 				if (mBlurEdges) {
 					mContext->CopyResource(mTempColor.mImage, dest.mImage);
 					ID3D11ShaderResourceView* srvs[1] = { mTempColor.GetSRV() };
-					RenderTexture(1, 1, srvs, dest.GetRTV(), mDisplaySizeX, mDisplaySizeY);
+					RenderTexture(1, 1, srvs, dsv, dest.GetRTV(), mDisplaySizeX, mDisplaySizeY);
 				}
 				float color[4] = { 0, 0, 0, 1 };
 				mContext->ClearRenderTargetView(mTargetTex.GetRTV(), color);
@@ -314,13 +312,13 @@ void SkyrimUpscaler::SetupTransparentMask(ID3D11Texture2D* transparent_buffer)
 
 void SkyrimUpscaler::SetupMotionVector(ID3D11Texture2D* motion_buffer)
 {
-	mMotionVectors.mImage = motion_buffer;
-	if (!mMotionVectorRect[0].mImage || !mMotionVectorRect[1].mImage) {
+	if (!mMotionVectors.mImage) {
 		D3D11_TEXTURE2D_DESC desc;
 		motion_buffer->GetDesc(&desc);
 		mDisplaySizeX = desc.Width;
 		mDisplaySizeY = desc.Height;
 	}
+	mMotionVectors.mImage = motion_buffer;
 }
 
 void SkyrimUpscaler::PreInit()
@@ -378,33 +376,9 @@ void SkyrimUpscaler::InitUpscaler()
 			desc2.BindFlags = D3D11_BIND_SHADER_RESOURCE;
 			mDevice->CreateTexture2D(&desc2, NULL, &mTempDepth.mImage);
 		}
-		ReleaseFoveatedResources();
 		mFoveatedRenderSizeX = mRenderSizeX * mFoveatedScaleX / 2;
 		mFoveatedRenderSizeY = mRenderSizeY * mFoveatedScaleY;
 		SetupD3DBox(mFoveatedOffsetX, mFoveatedOffsetY);
-		if (!mTempColorRect[0].mImage || !mTempColorRect[1].mImage) {
-			desc.Width = mFoveatedRenderSizeX;
-			desc.Height = mFoveatedRenderSizeY;
-			mDevice->CreateTexture2D(&desc, NULL, &mTempColorRect[0].mImage);
-			mDevice->CreateTexture2D(&desc, NULL, &mTempColorRect[1].mImage);
-		}
-		if (!mDepthRect[0].mImage || !mDepthRect[1].mImage) {
-			D3D11_TEXTURE2D_DESC desc2;
-			mDepthBuffer.mImage->GetDesc(&desc2);
-			desc2.Width = mFoveatedRenderSizeX;
-			desc2.Height = mFoveatedRenderSizeY;
-			desc2.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-			mDevice->CreateTexture2D(&desc2, NULL, &mDepthRect[0].mImage);
-			mDevice->CreateTexture2D(&desc2, NULL, &mDepthRect[1].mImage);
-		}
-		if (!mMotionVectorRect[0].mImage || !mMotionVectorRect[1].mImage) {
-			D3D11_TEXTURE2D_DESC desc2;
-			mMotionVectors.mImage->GetDesc(&desc2);
-			desc2.Width = mFoveatedRenderSizeX;
-			desc2.Height = mFoveatedRenderSizeY;
-			mDevice->CreateTexture2D(&desc2, NULL, &mMotionVectorRect[0].mImage);
-			mDevice->CreateTexture2D(&desc2, NULL, &mMotionVectorRect[1].mImage);
-		}
 		mMotionScale[0] = mRenderSizeX/2;
 		mMotionScale[1] = mRenderSizeY;
 		SetMotionScaleX(0, mMotionScale[0]);
@@ -431,16 +405,6 @@ void SkyrimUpscaler::InitUpscaler()
 			mMipLodBias = 0;
 		UnkOuterStruct::GetSingleton()->SetTAA(mEnableUpscaler);
 	}
-}
-
-void SkyrimUpscaler::ReleaseFoveatedResources()
-{
-	mTempColorRect[0].Release();
-	mTempColorRect[1].Release();
-	mDepthRect[0].Release();
-	mDepthRect[1].Release();
-	mMotionVectorRect[0].Release();
-	mMotionVectorRect[1].Release();
 }
 
 void SkyrimUpscaler::InitShader()
@@ -494,6 +458,24 @@ void SkyrimUpscaler::InitShader()
 
 	mDevice->CreateBlendState(&blendDesc, &mBlendState);
 
+	
+	D3D11_DEPTH_STENCIL_DESC depthDesc;
+	ZeroMemory(&depthDesc, sizeof(depthDesc));
+
+	depthDesc.DepthEnable = false;
+	depthDesc.StencilEnable = true;
+	depthDesc.StencilReadMask = 0xFF;
+	depthDesc.FrontFace.StencilFunc = D3D11_COMPARISON_EQUAL;
+	depthDesc.FrontFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
+	depthDesc.FrontFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+	depthDesc.FrontFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+	depthDesc.BackFace.StencilFunc = D3D11_COMPARISON_EQUAL;
+	depthDesc.BackFace.StencilDepthFailOp = D3D11_STENCIL_OP_KEEP;
+	depthDesc.BackFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
+	depthDesc.BackFace.StencilFailOp = D3D11_STENCIL_OP_KEEP;
+
+	mDevice->CreateDepthStencilState(&depthDesc, &mDepthStencilState);
+
 	mCustomConstants.jitterOffset[0] = 0;
 	mCustomConstants.jitterOffset[1] = 0;
 
@@ -513,11 +495,11 @@ void SkyrimUpscaler::InitShader()
 	auto hr = mDevice->CreateBuffer(&bd, &init, &mConstantsBuffer);
 }
 
-void SkyrimUpscaler::RenderTexture(int pixelShaderIndex, int numViews, ID3D11ShaderResourceView** inputSRV, ID3D11RenderTargetView* target, int width, int height, int topLeftX, int topLeftY)
+void SkyrimUpscaler::RenderTexture(int pixelShaderIndex, int numViews, ID3D11ShaderResourceView** inputSRV, ID3D11DepthStencilView* inputDSV, ID3D11RenderTargetView* target, int width, int height, int topLeftX, int topLeftY)
 {
-	mContext->OMSetRenderTargets(1, &target, nullptr);
+	mContext->OMSetRenderTargets(1, &target, inputDSV);
 	mContext->OMSetBlendState(mBlendState, nullptr, 0xffffffff);
-	mContext->OMSetDepthStencilState(nullptr, 0);
+	mContext->OMSetDepthStencilState(mDepthStencilState, 0);
 	mContext->VSSetShader(mVertexShader, nullptr, 0);
 	mContext->PSSetShader(mPixelShader[pixelShaderIndex], nullptr, 0);
 	mContext->PSSetShaderResources(0, numViews, inputSRV);

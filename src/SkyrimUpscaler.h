@@ -163,6 +163,7 @@ public:
 	float mCancelScaleY{ 0.5f };
 	float mBlurIntensity{ 1.5f };
 	float mBlendScale{ 5.0f };
+	float mMotionSensitivity{ 5.0f };
 
 	ImageWrapper mTargetTex;
 	ImageWrapper mTempColor;
@@ -186,9 +187,6 @@ public:
 	D3D11_BOX    mDstBox[2];
 	FoveatedRect mSrcBoxNorm[2];
 	ImageWrapper mOutColorRect[2];
-	ImageWrapper mTempColorRect[2];
-	ImageWrapper mDepthRect[2];
-	ImageWrapper mMotionVectorRect[2];
 
 	ID3D11VertexShader*    mVertexShader{ nullptr };
 	ID3D11PixelShader*     mPixelShader[3]{ nullptr, nullptr, nullptr };
@@ -197,6 +195,8 @@ public:
 	ID3D11BlendState*      mBlendState{ nullptr };
 	ID3D11Buffer*          mConstantsBuffer{ nullptr };
 	CustomConstants        mCustomConstants;
+
+	ID3D11DepthStencilState* mDepthStencilState{ nullptr };
 
 	IDXGISwapChain*      mSwapChain{ nullptr };
 	ID3D11Device*        mDevice{ nullptr };
@@ -217,7 +217,7 @@ public:
 	void MessageHandler(SKSE::MessagingInterface::Message* a_msg);
 
 	float GetVerticalFOVRad();
-	void  Evaluate(ID3D11Resource* destTex = nullptr);
+	void  Evaluate(ID3D11Resource* destTex, ID3D11DepthStencilView* dsv);
 	UpscaleParams GetUpscaleParams(int id, void* color, void* motionVector, void* depth, void* mask, void* destination, int renderSizeX, int renderSizeY, float sharpness,
 		float jitterOffsetX, float jitterOffsetY, int motionScaleX, int motionScaleY, bool reset, float nearPlane, float farPlane, float verticalFOV, bool execute = true);
 
@@ -235,10 +235,9 @@ public:
 	void SetEnabled(bool enabled);
 	void PreInit();
 	void InitUpscaler();
-	void ReleaseFoveatedResources();
 	void SetupD3DBox(float offsetX, float offsetY);
 	void InitShader();
-	void RenderTexture(int pixelShaderIndex, int numViews, ID3D11ShaderResourceView** inputSRV, ID3D11RenderTargetView* target, int width, int height, int topLeftX = 0, int topLeftY = 0);
+	void RenderTexture(int pixelShaderIndex, int numViews, ID3D11ShaderResourceView** inputSRV, ID3D11DepthStencilView* inputDSV, ID3D11RenderTargetView* target, int width, int height, int topLeftX = 0, int topLeftY = 0);
 };
 
 void InstallUpscalerHooks();

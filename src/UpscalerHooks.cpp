@@ -119,11 +119,13 @@ HRESULT WINAPI hk_ID3D11Device_CreateTexture2D(ID3D11Device* This, const D3D11_T
 // https://github.com/fholger/vrperfkit/blob/037c09f3168ac045b5775e8d1a0c8ac982b5854f/src/d3d11/d3d11_post_processor.cpp#L76
 static void SetMipLodBias(ID3D11SamplerState** outSamplers, UINT StartSlot, UINT NumSamplers, ID3D11SamplerState* const* ppSamplers)
 {
+	static int Skip = 0;
 	if (mipLodBias != SkyrimUpscaler::GetSingleton()->mMipLodBias) {
 		logger::info("MIP LOD Bias changed from  {} to {}, recreating samplers", mipLodBias, SkyrimUpscaler::GetSingleton()->mMipLodBias);
 		passThroughSamplers.clear();
 		mappedSamplers.clear();
 		mipLodBias = SkyrimUpscaler::GetSingleton()->mMipLodBias;
+		Skip = 1;
 	}
 	memcpy(outSamplers, ppSamplers, NumSamplers * sizeof(ID3D11SamplerState*));
 	for (UINT i = 0; i < NumSamplers; ++i) {
@@ -135,8 +137,10 @@ static void SetMipLodBias(ID3D11SamplerState** outSamplers, UINT StartSlot, UINT
 			D3D11_SAMPLER_DESC sd;
 			orig->GetDesc(&sd);
 			if (sd.MipLODBias != 0) {
-				// do not mess with samplers that already have a bias or are not doing anisotropic filtering.
-				// should hopefully reduce the chance of causing rendering errors.
+				passThroughSamplers.insert(orig);
+				continue;
+			}
+			if (sd.MaxAnisotropy <= 1 && Skip-- != 1) {
 				passThroughSamplers.insert(orig);
 				continue;
 			}
@@ -262,26 +266,6 @@ struct UpscalerHooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	struct Main_DrawWorld_MainDraw
-	{
-		static void thunk(INT64 BSGraphics_Renderer, int unk)
-		{
-			func(BSGraphics_Renderer, unk);
-			static bool initTAA = false;
-			if (!initTAA) {
-				initTAA = true;
-				UnkOuterStruct::GetSingleton()->SetTAA(SkyrimUpscaler::GetSingleton()->mUpscaleType == TAA);
-				if (SkyrimUpscaler::GetSingleton()->mTargetTex.mImage == nullptr) {
-					ID3D11Texture2D* targetTex;
-					SkyrimUpscaler::GetSingleton()->mSwapChain->GetBuffer(0, IID_PPV_ARGS(&targetTex));
-					SkyrimUpscaler::GetSingleton()->SetupTarget(targetTex);
-				}
-			}
-			SkyrimUpscaler::GetSingleton()->Evaluate();
-		}
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
 	struct BSImagespaceShader_Hook_VR
 	{
 		static void thunk(RE::BSImagespaceShader* param_1, uint64_t param_2)
@@ -302,21 +286,18 @@ struct UpscalerHooks
 				}
 			}
 			func(param_1, param_2);
-			static ID3D11Resource*         TargetTex = nullptr;
-			static ID3D11Resource*         DepthTex = nullptr;
+			static ID3D11Resource*  TargetTex = nullptr;
+			static ID3D11Resource*  DepthTex = nullptr;
+			static ID3D11RenderTargetView*  RTV = nullptr;
+			static ID3D11DepthStencilView*  DSV = nullptr;
 			if (TargetTex == nullptr) {
-				ID3D11RenderTargetView* RTV = nullptr;
-				ID3D11DepthStencilView* DSV = nullptr;
 				SkyrimUpscaler::GetSingleton()->mContext->OMGetRenderTargets(1, &RTV, &DSV);
 				if (RTV != nullptr)
 					RTV->GetResource(&TargetTex);
 				if (DSV != nullptr)
 					DSV->GetResource(&DepthTex);
 			}
-			if (SkyrimUpscaler::GetSingleton()->IsEnabled()) {
-				SkyrimUpscaler::GetSingleton()->Evaluate(TargetTex);
-				//SkyrimUpscaler::GetSingleton()->mContext->CopyResource(SkyrimUpscaler::GetSingleton()->mDepthBuffer.mImage, DepthTex);
-			}
+			SkyrimUpscaler::GetSingleton()->Evaluate(TargetTex, DSV);
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
@@ -349,30 +330,25 @@ struct UpscalerHooks
 
 	static void Install()
 	{
-		// Hook for getting the swapchain
-		// Nope, depth and motion texture are already created after this function, so can't use it
-		// stl::write_thunk_call<BSGraphics_Renderer_Init_InitD3D>(REL::RelocationID(75595, 77226).address() + REL::Relocate(0x50, 0x2BC));
-		// Have to hook the creation of SwapChain to hook CreateTexture2D before depth and motion textures are created
-		char* ptr = nullptr;
-		auto  moduleBase = (uintptr_t)GetModuleHandle(ptr);
-		auto  dllD3D11 = GetModuleHandleA("d3d11.dll");
-		*(FARPROC*)&ptrD3D11CreateDeviceAndSwapChain = GetProcAddress(dllD3D11, "D3D11CreateDeviceAndSwapChain");
-		Detours::IATHook(moduleBase, "d3d11.dll", "D3D11CreateDeviceAndSwapChain", (uintptr_t)hk_D3D11CreateDeviceAndSwapChain);
-		 
-		// Setup our own jitters
-		stl::write_thunk_call<BSGraphics_Renderer_Begin_UpdateJitter>(REL::RelocationID(75460, 77245).address() + REL::Relocate(0xE5, 0xE2, 0x104));  // D6A0C0 (D6A1A5), DA5A00 (DA5AE2)
-		// Always enable TAA jitters, even without TAA
-		static REL::Relocation<uintptr_t> updateJitterHook{ REL::RelocationID(75709, 77518) };          // D7CFB0, DB96E0
-		static REL::Relocation<uintptr_t> buildCameraStateDataHook{ REL::RelocationID(75711, 77520) };  // D7D130, DB9850
-		uint8_t                           patch1[] = { 0x90, 0x90, 0x90, 0x90, 0x90, 0x90 };
-		uint8_t                           patch2[] = { 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90 };
-		uint8_t                           patch3[] = { 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90};
-		if (!REL::Module::IsVR()) {
-			REL::safe_write<uint8_t>(updateJitterHook.address() + REL::Relocate(0xE, 0x11), patch1);
-			REL::safe_write<uint8_t>(buildCameraStateDataHook.address() + REL::Relocate(0x1D5, 0x1D5), patch2);
-			// Pre-UI Hook for upscaling, only for flatrim
-			stl::write_thunk_call<Main_DrawWorld_MainDraw>(REL::RelocationID(79947, 82084).address() + REL::Relocate(0x16F, 0x17A, 0x132));  // EBF510 (EBF67F), F05BF0 (F05D6A)
-		} else {
+		if (REL::Module::IsVR()) {
+			// Hook for getting the swapchain
+			// Nope, depth and motion texture are already created after this function, so can't use it
+			// stl::write_thunk_call<BSGraphics_Renderer_Init_InitD3D>(REL::RelocationID(75595, 77226).address() + REL::Relocate(0x50, 0x2BC));
+			// Have to hook the creation of SwapChain to hook CreateTexture2D before depth and motion textures are created
+			char* ptr = nullptr;
+			auto  moduleBase = (uintptr_t)GetModuleHandle(ptr);
+			auto  dllD3D11 = GetModuleHandleA("d3d11.dll");
+			*(FARPROC*)&ptrD3D11CreateDeviceAndSwapChain = GetProcAddress(dllD3D11, "D3D11CreateDeviceAndSwapChain");
+			Detours::IATHook(moduleBase, "d3d11.dll", "D3D11CreateDeviceAndSwapChain", (uintptr_t)hk_D3D11CreateDeviceAndSwapChain);
+
+			// Setup our own jitters
+			stl::write_thunk_call<BSGraphics_Renderer_Begin_UpdateJitter>(REL::RelocationID(75460, 77245).address() + REL::Relocate(0xE5, 0xE2, 0x104));  // D6A0C0 (D6A1A5), DA5A00 (DA5AE2)
+			// Always enable TAA jitters, even without TAA
+			static REL::Relocation<uintptr_t> updateJitterHook{ REL::RelocationID(75709, 77518) };          // D7CFB0, DB96E0
+			static REL::Relocation<uintptr_t> buildCameraStateDataHook{ REL::RelocationID(75711, 77520) };  // D7D130, DB9850
+			uint8_t                           patch1[] = { 0x90, 0x90, 0x90, 0x90, 0x90, 0x90 };
+			uint8_t                           patch2[] = { 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90 };
+			uint8_t                           patch3[] = { 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90 };
 			REL::safe_write<uint8_t>(updateJitterHook.address() + 0x17, patch2);
 			REL::safe_write<uint8_t>(buildCameraStateDataHook.address() + 0x34, patch3);
 			// Pre-UI Hook for upscaling specifically for VR
