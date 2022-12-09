@@ -28,10 +28,10 @@ inline IDXGISwapChain* DXGISwapChainProxy::GetCurrentSwapChain()
 /****IUknown****/
 HRESULT STDMETHODCALLTYPE DXGISwapChainProxy::QueryInterface(REFIID riid, void** ppvObj)
 {
-	if (riid == __uuidof(IDXGISwapChain) || riid == __uuidof(IDXGISwapChain2) || riid == __uuidof(IDXGISwapChain3) || riid == __uuidof(IDXGISwapChain4))
-		return GetCurrentSwapChain()->QueryInterface(riid, ppvObj);
+	if (riid == __uuidof(IDXGISwapChain2))
+		return mSwapChain2->QueryInterface(riid, ppvObj);
 
-	return E_NOTIMPL;
+	return mSwapChain1->QueryInterface(riid, ppvObj);
 }
 
 ULONG STDMETHODCALLTYPE DXGISwapChainProxy::AddRef()

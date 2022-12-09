@@ -113,7 +113,7 @@ void SkyrimUpscaler::EvaluateUpscaler()
 				// For DLSS to work in borderless mode we must copy the backbuffer to a temporary texture
 				context->CopyResource(mTempColor.mImage, back_buffer);
 				int j = (mEnableJitter) ? 1 : 0;
-				if (!mDisableResultCopying) {
+				if (!mDisableEvaluation) {
 					SimpleEvaluate(0, mTempColor.mImage, mMotionVectors.mImage, mDepthBuffer.mImage, nullptr, back_buffer, mRenderSizeX, mRenderSizeY, mSharpness, 
 						mJitterOffsets[0] * j, mJitterOffsets[1] * j, mMotionScale[0], mMotionScale[1], false, mNearPlane, mFarPlane, mFOV);
 					context->CopyResource(mMotionVectors.mImage, mMotionVectorsEmpty.mImage);

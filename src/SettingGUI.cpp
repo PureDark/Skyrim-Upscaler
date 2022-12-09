@@ -91,10 +91,12 @@ void SettingGUI::OnRender()
 		// Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
 		ImGui::Begin("Skyrim Upscaler Settings", &mShowGUI, ImGuiWindowFlags_NoCollapse);  
 		//ImGui::SetWindowSize(ImVec2(576, 340), 0.9f);
+		ImGui::BeginDisabled(true);
 		if (ImGui::Checkbox("Enable", &SkyrimUpscaler::GetSingleton()->mEnableUpscaler)) {
 			SkyrimUpscaler::GetSingleton()->SetEnabled(SkyrimUpscaler::GetSingleton()->mEnableUpscaler);
 		}
-		ImGui::Checkbox("Disable Result Copying", &SkyrimUpscaler::GetSingleton()->mDisableResultCopying);
+		ImGui::EndDisabled();
+		ImGui::Checkbox("Disable Evaluation", &SkyrimUpscaler::GetSingleton()->mDisableEvaluation);
 		ImGui::Checkbox("Jitter", &SkyrimUpscaler::GetSingleton()->mEnableJitter);
 		if (ImGui::Checkbox("Debug", &SkyrimUpscaler::GetSingleton()->mDebug)) {
 			std::this_thread::sleep_for(std::chrono::milliseconds(100));

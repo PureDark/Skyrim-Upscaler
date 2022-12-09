@@ -149,7 +149,7 @@ public:
 	float mFarPlane{ 1000 };
 	float mNearPlane{ 0.3f };
 
-	bool mDisableResultCopying{ false };
+	bool mDisableEvaluation{ false };
 	bool mUseOptimalMipLodBias{ true };
 	bool mDebug{ false };
 
