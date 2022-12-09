@@ -73,7 +73,7 @@ std::string GetLibraryPath(std::string filename)
 	}
 
 	std::string::size_type pos = std::string(path).find_last_of("\\/");
-	return (std::string(path).substr(0, pos) + "/SkyrimUpscaler/" + filename);
+	return (std::string(path).substr(0, pos) + "/../../UpscalerBasePlugin/" + filename);
 }
 
 EXTERN_C [[maybe_unused]] __declspec(dllexport) bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_skse)

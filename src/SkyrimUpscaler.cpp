@@ -27,7 +27,9 @@ void SkyrimUpscaler::LoadINI()
 	GetSettingFloat("Settings", mSharpness, 0);
 	mUpscaleType = std::clamp(mUpscaleType, 0, 3);
 	mQualityLevel = std::clamp(mQualityLevel, 0, 3);
-	GetSettingInt("Hotkeys", SettingGUI::GetSingleton()->mToggleHotkey, ImGuiKey_End);
+	int mToggleHotkey = ImGuiKey_End;
+	GetSettingInt("Hotkeys", mToggleHotkey, ImGuiKey_End);
+	SettingGUI::GetSingleton()->mToggleHotkey = mToggleHotkey;
 
 	auto bFXAAEnabled = RE::GetINISetting("bFXAAEnabled:Display");
 	if (!REL::Module::IsVR()) {
@@ -100,7 +102,6 @@ void SkyrimUpscaler::EvaluateUpscaler(ID3D11Texture2D* source)
 
 	if (mSwapChain != nullptr) {
 		if (mTargetTex.mImage != nullptr && mDepthBuffer.mImage != nullptr && mMotionVectors.mImage != nullptr) {
-			ID3D11Texture2D* motionVectorTex = (RE::UI::GetSingleton()->GameIsPaused() && !REL::Module::IsVR() ? mMotionVectorsEmpty.mImage : mMotionVectors.mImage);
 			ID3D11Texture2D* transparentMask = (mEnableTransparentMask ? mTransparentMask.mImage : nullptr);
 			bool             enable = IsEnabled();
 			bool             delayOneFrame = false && (lastEnable && !enable);
@@ -112,9 +113,10 @@ void SkyrimUpscaler::EvaluateUpscaler(ID3D11Texture2D* source)
 					source = mTargetTex.mImage;
 				mContext->CopyResource(mTempColor.mImage, source);
 				int j = (mEnableJitter) ? 1 : 0;
-				if (!mDisableResultCopying) {
-					SimpleEvaluate(0, mTempColor.mImage, motionVectorTex, mDepthBuffer.mImage, transparentMask, mTargetTex.mImage, mRenderSizeX, mRenderSizeY, mSharpness, 
+				if (!mDisableEvaluation) {
+					SimpleEvaluate(0, mTempColor.mImage, mMotionVectors.mImage, mDepthBuffer.mImage, transparentMask, mTargetTex.mImage, mRenderSizeX, mRenderSizeY, mSharpness, 
 						mJitterOffsets[0] * j, mJitterOffsets[1] * j, mMotionScale[0], mMotionScale[1], false, g_fNear / 100, g_fFar / 100, GetVerticalFOVRad());
+					mContext->CopyResource(mMotionVectors.mImage, mMotionVectorsEmpty.mImage);
 				}
 			}
 		}
@@ -155,12 +157,14 @@ void SkyrimUpscaler::SetEnabled(bool enabled)
 	if (mEnableUpscaler && mUpscaleType != TAA) {
 		DRS::GetSingleton()->targetScaleFactor = mRenderScale;
 		DRS::GetSingleton()->ControlResolution();
-		mMipLodBias = (mUpscaleType==DLAA)?0:GetOptimalMipmapBias(0);
+		if (mUseOptimalMipLodBias)
+			mMipLodBias = (mUpscaleType==DLAA)?0:GetOptimalMipmapBias(0);
 		UnkOuterStruct::GetSingleton()->SetTAA(false);
 	} else {
 		DRS::GetSingleton()->targetScaleFactor = 1.0f;
 		DRS::GetSingleton()->ControlResolution();
-		mMipLodBias = 0;
+		if (mUseOptimalMipLodBias)
+			mMipLodBias = 0;
 		UnkOuterStruct::GetSingleton()->SetTAA(mEnableUpscaler && mUpscaleType == TAA);
 	}
 }
@@ -250,17 +254,20 @@ void SkyrimUpscaler::InitUpscaler()
 		if (mEnableUpscaler && mUpscaleType != DLAA) {
 			DRS::GetSingleton()->targetScaleFactor = mRenderScale;
 			DRS::GetSingleton()->ControlResolution();	
-			mMipLodBias = GetOptimalMipmapBias(0);
+			if (mUseOptimalMipLodBias)
+				mMipLodBias = GetOptimalMipmapBias(0);
 		} else {
 			DRS::GetSingleton()->targetScaleFactor = 1.0f;
 			DRS::GetSingleton()->ControlResolution();
-			mMipLodBias = 0;
+			if (mUseOptimalMipLodBias)
+				mMipLodBias = 0;
 		}
 		UnkOuterStruct::GetSingleton()->SetTAA(false);
 	} else {
 		DRS::GetSingleton()->targetScaleFactor = 1.0f;
 		DRS::GetSingleton()->ControlResolution();
-		mMipLodBias = 0;
+		if (mUseOptimalMipLodBias)
+			mMipLodBias = 0;
 		UnkOuterStruct::GetSingleton()->SetTAA(mEnableUpscaler);
 	}
 }

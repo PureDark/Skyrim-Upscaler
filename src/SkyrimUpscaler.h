@@ -120,7 +120,7 @@ public:
 	int   mQualityLevel{ 0 };
 	float mMipLodBias{ 0 };
 
-	bool mDisableResultCopying{ false };
+	bool mDisableEvaluation{ false };
 	bool mUseOptimalMipLodBias{ true };
 	bool mEnableTransparentMask{ false };
 

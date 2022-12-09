@@ -27,6 +27,12 @@ enum PerfQualityLevel
 
 typedef struct
 {
+	unsigned int X;
+	unsigned int Y;
+} Coordinates;
+
+typedef struct
+{
 	int  id;
 	int  upscaleMethod;
 	int  qualityLevel;
@@ -41,27 +47,33 @@ typedef struct
 	bool enableAutoExposure;
 } InitParams;
 
-typedef struct
+struct UpscaleParams
 {
-	int   id;
-	void* color;
-	void* motionVector;
-	void* depth;
-	void* mask;
-	void* destination;
-	float renderSizeX;
-	float renderSizeY;
-	float sharpness;
-	float jitterOffsetX;
-	float jitterOffsetY;
-	float motionScaleX;
-	float motionScaleY;
-	bool  reset;
-	float nearPlane;
-	float farPlane;
-	float verticalFOV;
-	bool  execute;
-} UpscaleParams;
+	int         id;
+	void*       color;
+	void*       motionVector;
+	void*       depth;
+	void*       mask;
+	void*       resolvedColor = nullptr;  // Do not use
+	void*       destination;
+	float       renderSizeX;
+	float       renderSizeY;
+	float       sharpness;
+	float       jitterOffsetX;
+	float       jitterOffsetY;
+	float       motionScaleX;
+	float       motionScaleY;
+	bool        reset;
+	float       nearPlane;
+	float       farPlane;
+	float       verticalFOV;
+	bool        execute;
+	void*       cmdList = nullptr;  // Don not use
+	Coordinates colorBase = { 0, 0 };
+	Coordinates depthBase = { 0, 0 };
+	Coordinates motionBase = { 0, 0 };
+};
+
 /* If you are calling EvaluateUpscale more than once per frame, set execute to true only at last call*/
 
 extern "C" __declspec(dllexport) bool __stdcall SetupDirectX(void* item, int graphicsAPI);

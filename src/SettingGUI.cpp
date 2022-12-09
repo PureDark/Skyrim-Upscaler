@@ -101,9 +101,9 @@ void SettingGUI::OnRender()
 		if (ImGui::Checkbox("Enable", &SkyrimUpscaler::GetSingleton()->mEnableUpscaler)) {
 			SkyrimUpscaler::GetSingleton()->SetEnabled(SkyrimUpscaler::GetSingleton()->mEnableUpscaler);
 		}
-		ImGui::Checkbox("Disable Result Copying", &SkyrimUpscaler::GetSingleton()->mDisableResultCopying);
+		ImGui::Checkbox("Disable Evaluation", &SkyrimUpscaler::GetSingleton()->mDisableEvaluation);
 		ImGui::Checkbox("Jitter", &SkyrimUpscaler::GetSingleton()->mEnableJitter);
-		ImGui::Checkbox("Enable Transparent Mask", &SkyrimUpscaler::GetSingleton()->mEnableTransparentMask);
+		//ImGui::Checkbox("Enable Transparent Mask", &SkyrimUpscaler::GetSingleton()->mEnableTransparentMask);
 		if (ImGui::Checkbox("Sharpness", &SkyrimUpscaler::GetSingleton()->mSharpening)) {
 			SkyrimUpscaler::GetSingleton()->InitUpscaler();
 		}

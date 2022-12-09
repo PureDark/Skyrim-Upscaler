@@ -266,7 +266,6 @@ struct UpscalerHooks
 	{
 		static void thunk(INT64 BSGraphics_Renderer, int unk)
 		{
-			func(BSGraphics_Renderer, unk);
 			static bool initTAA = false;
 			if (!initTAA) {
 				initTAA = true;
@@ -278,6 +277,7 @@ struct UpscalerHooks
 				}
 			}
 			SkyrimUpscaler::GetSingleton()->EvaluateUpscaler();
+			func(BSGraphics_Renderer, unk);
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
