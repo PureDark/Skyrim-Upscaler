@@ -37,6 +37,8 @@ public:
 	float lastScaleFactor = 1.0f;
 	float currentScaleFactor = 1.0f;
 	bool  reset = false;
+	bool  isInMainMenu = false;
+	bool  isInLoadingMenu = false;
 
 	void Update();
 	void ControlResolution();
@@ -44,6 +46,8 @@ public:
 
 	void SetDRS(BSGraphics::State* a_state);
 	void SetDRSVR(float renderScale = 0);
+
+	bool IsInFullscreenMenu();
 
 	void MessageHandler(SKSE::MessagingInterface::Message* a_msg);
 

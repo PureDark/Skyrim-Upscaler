@@ -30,7 +30,7 @@ static inline const char* format_to_string(DXGI_FORMAT format)
 	}
 }
 
-void ProcessEvent(ImGuiKey key);
+void ProcessEvent(ImGuiKey key, ImGuiKey key2);
 
 void SettingGUI::InitIMGUI(IDXGISwapChain* swapchain, ID3D11Device* device, ID3D11DeviceContext* context)
 {
@@ -67,14 +67,43 @@ void SettingGUI::InitIMGUI(IDXGISwapChain* swapchain, ID3D11Device* device, ID3D
 		logger::info("SettingGUI::InitIMGUI Success!");
 }
 
+#ifndef max
+#	define max(a, b) (((a) > (b)) ? (a) : (b))
+#endif
+
+ImVec2 GetTextureDimensions(ID3D11ShaderResourceView* view)
+{
+	ID3D11Resource* res = nullptr;
+	view->GetResource(&res);
+
+	ID3D11Texture2D* texture2d = nullptr;
+	HRESULT          hr = res->QueryInterface(&texture2d);
+
+	ImVec2 dim(512, 512);
+	if (SUCCEEDED(hr)) {
+		D3D11_TEXTURE2D_DESC desc;
+		texture2d->GetDesc(&desc);
+		dim.x = static_cast<float>(desc.Width);
+		dim.y = static_cast<float>(desc.Height);
+	}
+	float biggest = max(dim.x, dim.y);
+	if (biggest > 512) {
+		dim.x *= 512 / biggest;
+		dim.y *= 512 / biggest;
+	}
+	return dim;
+}
+
 void SettingGUI::OnRender()
 {
 	if (REL::Module::IsVR()) {
-		ProcessEvent(mToggleHotkey);
+		ProcessEvent(mToggleHotkey, SkyrimUpscaler::GetSingleton()->mToggleUpscaler);
 	}
 	
 	if (ImGui::IsKeyReleased(mToggleHotkey))
 		toggle();
+	if (ImGui::IsKeyReleased(SkyrimUpscaler::GetSingleton()->mToggleUpscaler))
+		SkyrimUpscaler::GetSingleton()->SetEnabled(!SkyrimUpscaler::GetSingleton()->mEnableUpscaler);
 
 	auto&  io = ImGui::GetIO();
 	io.MouseDrawCursor = mShowGUI;
@@ -122,6 +151,7 @@ void SettingGUI::OnRender()
 		//ImGui::BeginDisabled(!SkyrimUpscaler::GetSingleton()->mBlurEdges);
 		//ImGui::DragFloat("Blur Intensity", &SkyrimUpscaler::GetSingleton()->mBlurIntensity, 0.1f, 0.0f, 10.0f);
 		//ImGui::EndDisabled();
+
 		ImGui::DragFloat("Motion Sensitivity", &SkyrimUpscaler::GetSingleton()->mMotionSensitivity, 0.1f, 0.0f, 10.0f);
 		ImGui::DragFloat("Blend Scale", &SkyrimUpscaler::GetSingleton()->mBlendScale, 0.1f, 0.0f, 10.0f);
 		ImGui::Checkbox("Jitter", &SkyrimUpscaler::GetSingleton()->mEnableJitter);
@@ -178,6 +208,38 @@ void SettingGUI::OnRender()
 			SkyrimUpscaler::GetSingleton()->mMipLodBias = 0;
 		}
 		ImGui::EndDisabled();
+
+		std::vector<const char*> imgui_combo_names{};
+		imgui_combo_names.push_back("DLSS");
+		imgui_combo_names.push_back("FSR2");
+		imgui_combo_names.push_back("XeSS");
+		imgui_combo_names.push_back("DLAA");
+		//Somehow TAA hook not working in VR
+		//imgui_combo_names.push_back("TAA");
+
+		if (ImGui::Combo("Upscale Type", (int*)&SkyrimUpscaler::GetSingleton()->mUpscaleType, imgui_combo_names.data(), imgui_combo_names.size())) {
+			if (SkyrimUpscaler::GetSingleton()->mUpscaleType < 0 || SkyrimUpscaler::GetSingleton()->mUpscaleType >= imgui_combo_names.size()) {
+				SkyrimUpscaler::GetSingleton()->mUpscaleType = 0;
+			}
+
+			SkyrimUpscaler::GetSingleton()->InitUpscaler();
+		}
+		const auto qualities = (SkyrimUpscaler::GetSingleton()->mUpscaleType == XESS) ? "Performance\0Balanced\0Quality\0UltraQuality\0" : "Performance\0Balanced\0Quality\0UltraPerformance\0";
+
+		ImGui::BeginDisabled(SkyrimUpscaler::GetSingleton()->mUpscaleType == TAA);
+		if (ImGui::Combo("Quality Level", (int*)&SkyrimUpscaler::GetSingleton()->mQualityLevel, qualities)) {
+			SkyrimUpscaler::GetSingleton()->InitUpscaler();
+		}
+
+		const auto w = (float)GetRenderWidth(0);
+		const auto h = (float)GetRenderHeight(0);
+
+		if (ImGui::DragFloat("MotionScale X", &SkyrimUpscaler::GetSingleton()->mMotionScale[0], 0.01f, -w, w) ||
+			ImGui::DragFloat("MotionScale Y", &SkyrimUpscaler::GetSingleton()->mMotionScale[1], 0.01f, -h, h)) {
+			SkyrimUpscaler::GetSingleton()->SetMotionScale(SkyrimUpscaler::GetSingleton()->mMotionScale[0], SkyrimUpscaler::GetSingleton()->mMotionScale[1]);
+		}
+		ImGui::EndDisabled();
+
 		/*ImGui::Spacing();
 		if (ImGui::ArrowButton("mCancelScaleX-", ImGuiDir_Left)) {
 			SkyrimUpscaler::GetSingleton()->mCancelScaleX -= 0.01f;
@@ -198,6 +260,7 @@ void SettingGUI::OnRender()
 		}
 		ImGui::SameLine(0, 4.0f);
 		ImGui::DragFloat("Cancel Scale Y", &SkyrimUpscaler::GetSingleton()->mCancelScaleY, 0.001f, 0.0f, 3.0f);*/
+
 		ImGui::Spacing();
 		if (ImGui::ArrowButton("mFoveatedScaleX-", ImGuiDir_Left)) {
 			SkyrimUpscaler::GetSingleton()->mFoveatedScaleX -= 0.01f;
@@ -252,40 +315,29 @@ void SettingGUI::OnRender()
 			SkyrimUpscaler::GetSingleton()->SetupD3DBox(SkyrimUpscaler::GetSingleton()->mFoveatedOffsetX, SkyrimUpscaler::GetSingleton()->mFoveatedOffsetY);
 		}
 		ImGui::Spacing();
-
-		std::vector<const char*> imgui_combo_names{};
-		imgui_combo_names.push_back("DLSS");
-		imgui_combo_names.push_back("FSR2");
-		imgui_combo_names.push_back("XeSS");
-		imgui_combo_names.push_back("DLAA");
-		//Somehow TAA hook not working in VR
-		//imgui_combo_names.push_back("TAA");
-
-		if (ImGui::Combo("Upscale Type", (int*)&SkyrimUpscaler::GetSingleton()->mUpscaleType, imgui_combo_names.data(), imgui_combo_names.size())) {
-			if (SkyrimUpscaler::GetSingleton()->mUpscaleType < 0 || SkyrimUpscaler::GetSingleton()->mUpscaleType >= imgui_combo_names.size()) {
-				SkyrimUpscaler::GetSingleton()->mUpscaleType = 0;
+		ImGui::Checkbox("Enable Fixed Foveated Rendering", &SkyrimUpscaler::GetSingleton()->mVRS->mEnableFixedFoveatedRendering);
+		if (ImGui::DragFloat("Inner Radius", &SkyrimUpscaler::GetSingleton()->mVRS->mInnerRadius, 0.01f, 0.0f, 1.0f)) {
+			SkyrimUpscaler::GetSingleton()->mVRS->mNeedUpdate = true;
+		};
+		if (ImGui::DragFloat("Middle Radius", &SkyrimUpscaler::GetSingleton()->mVRS->mMiddleRadius, 0.01f, 0.0f, 1.2f)) {
+			SkyrimUpscaler::GetSingleton()->mVRS->mNeedUpdate = true;
+		};
+		if (ImGui::DragFloat("Outter Radius", &SkyrimUpscaler::GetSingleton()->mVRS->mOutterRadius, 0.01f, 0.0f, 1.5f)) {
+			SkyrimUpscaler::GetSingleton()->mVRS->mNeedUpdate = true;
+		};
+		if (ImGui::DragFloat("Widen", &SkyrimUpscaler::GetSingleton()->mVRS->mWiden, 0.01f, 0.1f, 4.0f)) {
+			SkyrimUpscaler::GetSingleton()->mVRS->mNeedUpdate = true;
+		};
+		if (SkyrimUpscaler::GetSingleton()->mVRS->mEnableFixedFoveatedRendering) {
+			ImGui::Spacing();
+			ImGui::Separator();
+			ImGui::Spacing();
+			ImGui::Checkbox("Enable Debug Overlay", &SkyrimUpscaler::GetSingleton()->mDebugOverlay);
+			if (SkyrimUpscaler::GetSingleton()->mVRS->combinedVRSShowTex.mImage) {
+				ImVec2 vec = GetTextureDimensions(SkyrimUpscaler::GetSingleton()->mVRS->combinedVRSShowTex.GetSRV());
+				ImGui::Image((void*)SkyrimUpscaler::GetSingleton()->mVRS->combinedVRSShowTex.GetSRV(), vec);
 			}
-
-			SkyrimUpscaler::GetSingleton()->InitUpscaler();
 		}
-		const auto qualities = (SkyrimUpscaler::GetSingleton()->mUpscaleType == XESS) 
-			? "Performance\0Balanced\0Quality\0UltraQuality\0" 
-			: "Performance\0Balanced\0Quality\0UltraPerformance\0";
-
-		ImGui::BeginDisabled(SkyrimUpscaler::GetSingleton()->mUpscaleType == TAA);
-		if (ImGui::Combo("Quality Level", (int*)&SkyrimUpscaler::GetSingleton()->mQualityLevel, qualities)) {
-			SkyrimUpscaler::GetSingleton()->InitUpscaler();
-		}
-
-		const auto w = (float)GetRenderWidth(0);
-		const auto h = (float)GetRenderHeight(0);
-
-		if (ImGui::DragFloat("MotionScale X", &SkyrimUpscaler::GetSingleton()->mMotionScale[0], 0.01f, -w, w) ||
-			ImGui::DragFloat("MotionScale Y", &SkyrimUpscaler::GetSingleton()->mMotionScale[1], 0.01f, -h, h)) {
-			SkyrimUpscaler::GetSingleton()->SetMotionScale(SkyrimUpscaler::GetSingleton()->mMotionScale[0], SkyrimUpscaler::GetSingleton()->mMotionScale[1]);
-		}
-		ImGui::EndDisabled();
-
 		ImGui::Spacing();
 		ImGui::Separator();
 		ImGui::Spacing();
@@ -332,6 +384,12 @@ void SettingGUI::OnCleanup()
 	ImGui_ImplDX11_Shutdown();
 	ImGui_ImplWin32_Shutdown();
 	ImGui::DestroyContext();
+}
+
+void SettingGUI::toggle()
+{
+	ForceEnabled(!mShowGUI);
+	SkyrimUpscaler::GetSingleton()->SaveINI();
 }
 
 // Codes below are from CatHub
@@ -416,7 +474,7 @@ RE::BSEventNotifyControl InputListener::ProcessEvent(RE::InputEvent* const* a_ev
 	return RE::BSEventNotifyControl::kContinue;
 }
 
-void ProcessEvent(ImGuiKey key)
+void ProcessEvent(ImGuiKey key, ImGuiKey key2)
 {
 	auto& io = ImGui::GetIO();
 	static bool leftButton = false;
@@ -429,14 +487,21 @@ void ProcessEvent(ImGuiKey key)
 		io.AddMouseButtonEvent(0, leftButton);
 	}
 
-	auto vkey = ImGuiKeyToVirtualKey(key);
-
-	static bool pressed = false;
-	if (GetAsyncKeyState(vkey) < 0 && pressed == false) {
-		pressed = true;
-	}
-	if (GetAsyncKeyState(vkey) == 0 && pressed == true) {
-		pressed = false;
-		SettingGUI::GetSingleton()->toggle();
+	WPARAM keys[4] = {
+		ImGuiKeyToVirtualKey(key),
+		ImGuiKeyToVirtualKey(key2),
+		VK_DELETE,
+		VK_BACK
+	};
+	static bool pressed[4]{ false };
+	for (int i = 0; i < 4; i++) {
+		if (GetAsyncKeyState(keys[i]) < 0 && pressed[i] == false) {
+			pressed[i] = true;
+			io.AddKeyEvent(VirtualKeyToImGuiKey(keys[i]), true);
+		}
+		if (GetAsyncKeyState(keys[i]) == 0 && pressed[i] == true) {
+			pressed[i] = false;
+			io.AddKeyEvent(VirtualKeyToImGuiKey(keys[i]), false);
+		}
 	}
 }

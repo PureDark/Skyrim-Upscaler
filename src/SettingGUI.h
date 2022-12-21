@@ -34,10 +34,7 @@ public:
 		return &handler;
 	}
 
-	void toggle()
-	{
-		ForceEnabled(!mShowGUI);
-	}
+	void toggle();
 
 	void ForceEnabled(bool enabled)
 	{

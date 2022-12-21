@@ -8,7 +8,7 @@ cbuffer constrant : register(b0)
 	float2 jitterOffset;
 	float2 dynamicResScale;
 	float2 screenSize;
-	float  blurIntensity;
+	float  motionSensitivity;
 	float  blendScale;
 	float4 leftRect;
 	float4 rightRect;
@@ -16,14 +16,14 @@ cbuffer constrant : register(b0)
 
 float4 GetColor(float2 coord)
 {
-	if (((coord.x > leftRect.x + 0.05f && coord.y > leftRect.y + 0.05f) && (coord.x < leftRect.z - 0.05f && coord.y < leftRect.w - 0.05f)) 
-		|| ((coord.x > rightRect.x + 0.05f && coord.y > rightRect.y + 0.05f) && (coord.x < rightRect.z - 0.05f && coord.y < rightRect.w - 0.05f)))
+	if (((coord.x > leftRect.x + 0.03f && coord.y > leftRect.y + 0.03f) && (coord.x < leftRect.z - 0.03f && coord.y < leftRect.w - 0.03f)) 
+		|| ((coord.x > rightRect.x + 0.03f && coord.y > rightRect.y + 0.03f) && (coord.x < rightRect.z - 0.03f && coord.y < rightRect.w - 0.03f)))
 		return float4(0, 0, 0, 0);
 
 	float2 unJitteredUV = coord * dynamicResScale + jitterOffset;
 	float2 motionVector = motionTex.Sample(srcSampler, unJitteredUV).xy * float2(0.5f, 1);
 	float2 acCoord = coord + motionVector;
-	float  weight = min(1.0f, 0.25f + (abs(motionVector.x) + abs(motionVector.y)) * 10.0f * blurIntensity);
+	float  weight = min(1.0f, 0.25f + (abs(motionVector.x) + abs(motionVector.y)) * 10.0f * motionSensitivity);
 	float3 color = srcTex.Sample(srcSampler, unJitteredUV).xyz * weight + accumulateTex.Sample(srcSampler, acCoord).xyz * (1.0f - weight);
 
 	return float4(color, 1.0f);

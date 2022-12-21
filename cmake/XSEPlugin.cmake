@@ -68,6 +68,7 @@ target_include_directories(
 	"${PROJECT_NAME}"
 	PUBLIC
 		${CMAKE_CURRENT_SOURCE_DIR}/include
+		${CMAKE_CURRENT_SOURCE_DIR}/extern/nvapi
 	PRIVATE
 		${CMAKE_CURRENT_BINARY_DIR}/cmake
 		${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -156,6 +157,8 @@ if (BUILD_SKYRIM)
 			optimized ${CMAKE_CURRENT_SOURCE_DIR}/extern/detours/x64/Release/detours.lib
 			debug ${CMAKE_CURRENT_SOURCE_DIR}/extern/PDPerfPlugin.lib
 			optimized ${CMAKE_CURRENT_SOURCE_DIR}/extern/PDPerfPlugin.lib
+			debug ${CMAKE_CURRENT_SOURCE_DIR}/extern/nvapi/amd64/nvapi64.lib
+			optimized ${CMAKE_CURRENT_SOURCE_DIR}/extern/nvapi/amd64/nvapi64.lib
 	)
 else()
 	add_subdirectory(${CommonLibPath} ${CommonLibName} EXCLUDE_FROM_ALL)

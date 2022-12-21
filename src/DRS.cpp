@@ -72,6 +72,11 @@ void DRS::MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 	}
 }
 
+bool DRS::IsInFullscreenMenu()
+{
+	return isInMainMenu || isInLoadingMenu;
+}
+
 // Fader Menu
 // Mist Menu
 // Loading Menu
@@ -79,6 +84,19 @@ void DRS::MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 
 RE::BSEventNotifyControl MenuOpenCloseEventHandler::ProcessEvent(const RE::MenuOpenCloseEvent* a_event, RE::BSTEventSource<RE::MenuOpenCloseEvent>*)
 {
+	if (a_event->menuName == RE::MainMenu::MENU_NAME) {
+		if (a_event->opening) {
+			DRS::GetSingleton()->isInMainMenu = true;
+		} else {
+			DRS::GetSingleton()->isInMainMenu = false;
+		}
+	} else if (a_event->menuName == RE::LoadingMenu::MENU_NAME) {
+		if (a_event->opening) {
+			DRS::GetSingleton()->isInLoadingMenu = true;
+		} else {
+			DRS::GetSingleton()->isInLoadingMenu = false;
+		}
+	}
 	if (a_event->menuName == RE::MainMenu::MENU_NAME ||
 		a_event->menuName == RE::LoadingMenu::MENU_NAME ||
 		a_event->menuName == RE::RaceSexMenu::MENU_NAME) {

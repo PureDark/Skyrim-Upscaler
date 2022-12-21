@@ -5,6 +5,7 @@
 #include <hlsl/cancel_jitter_ps.inc>
 #include <hlsl/blur_ps.inc>
 #include <hlsl/blend_ps.inc>
+#include <hlsl/debug_ps.inc>
 
 #define GetSettingInt(a_section, a_setting, a_default) a_setting = (int)ini.GetLongValue(a_section, #a_setting, a_default);
 #define SetSettingInt(a_section, a_setting) ini.SetLongValue(a_section, #a_setting, a_setting);
@@ -27,16 +28,31 @@ void SkyrimUpscaler::LoadINI()
 	GetSettingFloat("Settings", mMipLodBias, 0);
 	GetSettingBool("Settings", mSharpening, false);
 	GetSettingFloat("Settings", mSharpness, 0);
-	mUpscaleType = std::clamp(mUpscaleType, 0, 3);
+	mUpscaleType = std::clamp(mUpscaleType, 0, 4);
 	mQualityLevel = std::clamp(mQualityLevel, 0, 3);
 	int mToggleHotKey = 0;
 	GetSettingInt("Hotkeys", mToggleHotKey, ImGuiKey_End);
 	SettingGUI::GetSingleton()->mToggleHotkey = mToggleHotKey;
+	GetSettingInt("Hotkeys", mToggleUpscaler, ImGuiKey_KeypadMultiply);
 
 	GetSettingFloat("FixedFoveatedUpscaling", mFoveatedScaleX, 0.67f);
 	GetSettingFloat("FixedFoveatedUpscaling", mFoveatedScaleY, 0.57f);
 	GetSettingFloat("FixedFoveatedUpscaling", mFoveatedOffsetX, 0.04f);
 	GetSettingFloat("FixedFoveatedUpscaling", mFoveatedOffsetY, 0.04f);
+
+	bool  mEnableFixedFoveatedRendering;
+	float mInnerRadius, mMiddleRadius, mOutterRadius;
+	float mWiden;
+	GetSettingFloat("FixedFoveatedRendering", mEnableFixedFoveatedRendering, false);
+	GetSettingFloat("FixedFoveatedRendering", mInnerRadius, 0.6f);
+	GetSettingFloat("FixedFoveatedRendering", mMiddleRadius, 0.8f);
+	GetSettingFloat("FixedFoveatedRendering", mOutterRadius, 1.0f);
+	GetSettingFloat("FixedFoveatedRendering", mWiden, 1.0f);
+	mVRS->mEnableFixedFoveatedRendering = mEnableFixedFoveatedRendering;
+	mVRS->mInnerRadius = std::clamp(mInnerRadius, 0.0f, 1.0f);
+	mVRS->mMiddleRadius = std::clamp(mMiddleRadius, 0.0f, 1.2f);
+	mVRS->mOutterRadius = std::clamp(mOutterRadius, 0.0f, 1.5f);
+	mVRS->mWiden = std::clamp(mWiden, 0.1f, 4.0f);
 
 	auto bFXAAEnabled = RE::GetINISetting("bFXAAEnabled:Display");
 	if (!REL::Module::IsVR()) {
@@ -61,10 +77,23 @@ void SkyrimUpscaler::SaveINI()
 	SetSettingFloat("Settings", mSharpness);
 	int mToggleHotkey = SettingGUI::GetSingleton()->mToggleHotkey;
 	SetSettingInt("Hotkeys", mToggleHotkey);
+	SetSettingInt("Hotkeys", mToggleUpscaler);
 	SetSettingFloat("FixedFoveatedUpscaling", mFoveatedScaleX);
 	SetSettingFloat("FixedFoveatedUpscaling", mFoveatedScaleY);
 	SetSettingFloat("FixedFoveatedUpscaling", mFoveatedOffsetX);
 	SetSettingFloat("FixedFoveatedUpscaling", mFoveatedOffsetY);
+
+	bool mEnableFixedFoveatedRendering = mVRS->mEnableFixedFoveatedRendering;
+	float mInnerRadius = mVRS->mInnerRadius; 
+	float mMiddleRadius = mVRS->mMiddleRadius; 
+	float mOutterRadius = mVRS->mOutterRadius;
+	float mWiden = mVRS->mWiden; 
+	SetSettingFloat("FixedFoveatedRendering", mEnableFixedFoveatedRendering);
+	SetSettingFloat("FixedFoveatedRendering", mInnerRadius);
+	SetSettingFloat("FixedFoveatedRendering", mMiddleRadius);
+	SetSettingFloat("FixedFoveatedRendering", mOutterRadius);
+	SetSettingFloat("FixedFoveatedRendering", mWiden);
+	ini.SaveFile(L"Data\\SKSE\\Plugins\\SkyrimUpscaler.ini");
 }
 
 void SkyrimUpscaler::MessageHandler(SKSE::MessagingInterface::Message* a_msg)
@@ -79,6 +108,7 @@ void SkyrimUpscaler::MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 			//InitUpscaler();
 			inited = true;
 		}
+		SetEnabled(mEnableUpscaler);
 		break;
 
 	case SKSE::MessagingInterface::kSaveGame:
@@ -94,6 +124,7 @@ void SkyrimUpscaler::SetupSwapChain(IDXGISwapChain* swapchain)
 	mSwapChain->GetDevice(IID_PPV_ARGS(&mDevice));
 	mDevice->GetImmediateContext(&mContext);
 	SetupDirectX(mDevice, 0);
+	mVRS = new D3D11VariableRateShading(mDevice);
 }
 
 float SkyrimUpscaler::GetVerticalFOVRad()
@@ -142,22 +173,22 @@ void SkyrimUpscaler::Evaluate(ID3D11Resource* destTex, ID3D11DepthStencilView* d
 					UpscaleParams params2 = GetUpscaleParams(1, mTargetTex.mImage, mMotionVectors.mImage, mDepthBuffer.mImage, nullptr, nullptr, mFoveatedRenderSizeX, mFoveatedRenderSizeY, mSharpness,
 						mJitterOffsets[0], mJitterOffsets[1], mMotionScale[0], mMotionScale[1], false, 0.1f, 1000.0f, vFOV, true);
 					params.colorBase = { mSrcBox[0].left, mSrcBox[0].top };
-					params2.colorBase = { mSrcBox[1].left, mSrcBox[1].top };
 					params.depthBase = { mSrcBox[0].left, mSrcBox[0].top };
-					params2.depthBase = { mSrcBox[1].left, mSrcBox[1].top };
 					params.motionBase = { mSrcBox[0].left, mSrcBox[0].top };
+					params2.colorBase = { mSrcBox[1].left, mSrcBox[1].top };
+					params2.depthBase = { mSrcBox[1].left, mSrcBox[1].top };
 					params2.motionBase = { mSrcBox[1].left, mSrcBox[1].top };
 					EvaluateUpscaler(&params);
 					EvaluateUpscaler(&params2);
 				}
 				static ImageWrapper dest = { (ID3D11Texture2D*)destTex };
-				mCustomConstants.jitterOffset[0] = 0.5f * mJitterOffsets[0] / mRenderSizeX;
-				mCustomConstants.jitterOffset[1] = 0.5f * mJitterOffsets[1] / mRenderSizeY;
+				mCustomConstants.jitterOffset[0] = mJitterOffsets[0] / mDisplaySizeX;
+				mCustomConstants.jitterOffset[1] = mJitterOffsets[1] / mDisplaySizeY;
 				mCustomConstants.dynamicResScale[0] = mRenderScale;
 				mCustomConstants.dynamicResScale[1] = mRenderScale;
 				mCustomConstants.screenSize[0] = mDisplaySizeX;
 				mCustomConstants.screenSize[1] = mDisplaySizeY;
-				mCustomConstants.blurIntensity = mBlurIntensity;
+				mCustomConstants.motionSensitivity = mMotionSensitivity;
 				mCustomConstants.blendScale = mBlendScale;
 				if (mDisableEvaluation) {
 					mCustomConstants.leftRect[0] = 0;
@@ -201,6 +232,10 @@ void SkyrimUpscaler::Evaluate(ID3D11Resource* destTex, ID3D11DepthStencilView* d
 					ID3D11ShaderResourceView* srvs[1] = { mTempColor.GetSRV() };
 					RenderTexture(1, 1, srvs, dsv, dest.GetRTV(), mDisplaySizeX, mDisplaySizeY);
 				}
+				if (mDebugOverlay && mVRS->mEnableFixedFoveatedRendering) {
+					ID3D11ShaderResourceView* srvs[1] = { mVRS->combinedVRSShowTex.GetSRV()};
+					RenderTexture(3, 1, srvs, dsv, dest.GetRTV(), mDisplaySizeX, mDisplaySizeY);
+				}
 				float color[4] = { 0, 0, 0, 1 };
 				mContext->ClearRenderTargetView(mTargetTex.GetRTV(), color);
 			}
@@ -237,11 +272,25 @@ void SkyrimUpscaler::SetupD3DBox(float offsetX, float offsetY)
 	mSrcBoxNorm[1].right = mSrcBoxNorm[1].left + mFoveatedScaleX / 2;
 	mSrcBoxNorm[1].bottom = mSrcBoxNorm[0].bottom;
 
+	float leftCenterX = (mSrcBoxNorm[0].left + mSrcBoxNorm[0].right) / 2;
+	float leftCenterY = (mSrcBoxNorm[0].top + mSrcBoxNorm[0].bottom) / 2;
+	float rightCenterX = (mSrcBoxNorm[1].left + mSrcBoxNorm[1].right) / 2;
+	float rightCenterY = (mSrcBoxNorm[1].top + mSrcBoxNorm[1].bottom) / 2;
+	if(DRS::GetSingleton()->targetScaleFactor < 1.0f)
+		mVRS->UpdateTargetInformation(mDisplaySizeX, mDisplaySizeY, mRenderSizeX, mRenderSizeY, leftCenterX, leftCenterY, rightCenterX, rightCenterY);
+	else
+		mVRS->UpdateTargetInformation(mDisplaySizeX, mDisplaySizeY, mDisplaySizeX, mDisplaySizeY, leftCenterX, leftCenterY, rightCenterX, rightCenterY);
+
 	renderX = (float)mDisplaySizeX / 2;
 	mDstBox[0].left = (renderX - mFoveatedDisplaySizeX) / 2 + mFoveatedOffsetX * renderX;
 	mDstBox[0].top = (mDisplaySizeY - mFoveatedDisplaySizeY) / 2 + mFoveatedOffsetY * mDisplaySizeY;
 	mDstBox[1].left = (renderX - mFoveatedDisplaySizeX) / 2 + renderX - mFoveatedOffsetX * renderX;
 	mDstBox[1].top = (mDisplaySizeY - mFoveatedDisplaySizeY) / 2 + mFoveatedOffsetY * mDisplaySizeY;
+}
+
+bool SkyrimUpscaler::InFoveatedRect(float x, float y)
+{
+	return (((x >= mSrcBoxNorm[0].left && y >= mSrcBoxNorm[0].top) && (x <= mSrcBoxNorm[0].right && y <= mSrcBoxNorm[0].bottom)) || ((x >= mSrcBoxNorm[1].left && y >= mSrcBoxNorm[1].top) && (x <= mSrcBoxNorm[1].right && y <= mSrcBoxNorm[1].bottom)));
 }
 
 bool SkyrimUpscaler::IsEnabled()
@@ -274,6 +323,10 @@ void SkyrimUpscaler::SetMotionScale(float x, float y)
 
 void SkyrimUpscaler::SetEnabled(bool enabled)
 {
+	float leftCenterX = (mSrcBoxNorm[0].left + mSrcBoxNorm[0].right) / 2;
+	float leftCenterY = (mSrcBoxNorm[0].top + mSrcBoxNorm[0].bottom) / 2;
+	float rightCenterX = (mSrcBoxNorm[1].left + mSrcBoxNorm[1].right) / 2;
+	float rightCenterY = (mSrcBoxNorm[1].top + mSrcBoxNorm[1].bottom) / 2;
 	mEnableUpscaler = enabled;
 	if (mEnableUpscaler && mUpscaleType != TAA) {
 		DRS::GetSingleton()->targetScaleFactor = mRenderScale;
@@ -281,12 +334,14 @@ void SkyrimUpscaler::SetEnabled(bool enabled)
 		if (mUseOptimalMipLodBias)
 			mMipLodBias = (mUpscaleType==DLAA)?0:GetOptimalMipmapBias(0);
 		UnkOuterStruct::GetSingleton()->SetTAA(false);
+		mVRS->UpdateTargetInformation(mDisplaySizeX, mDisplaySizeY, mRenderSizeX, mRenderSizeY, leftCenterX, leftCenterY, rightCenterX, rightCenterY);
 	} else {
 		DRS::GetSingleton()->targetScaleFactor = 1.0f;
 		DRS::GetSingleton()->ControlResolution();
 		if (mUseOptimalMipLodBias)
 			mMipLodBias = 0;
 		UnkOuterStruct::GetSingleton()->SetTAA(mEnableUpscaler && mUpscaleType == TAA);
+		mVRS->UpdateTargetInformation(mDisplaySizeX, mDisplaySizeY, mDisplaySizeX, mDisplaySizeY, leftCenterX, leftCenterY, rightCenterX, rightCenterY);
 	}
 }
 
@@ -378,7 +433,6 @@ void SkyrimUpscaler::InitUpscaler()
 		}
 		mFoveatedRenderSizeX = mRenderSizeX * mFoveatedScaleX / 2;
 		mFoveatedRenderSizeY = mRenderSizeY * mFoveatedScaleY;
-		SetupD3DBox(mFoveatedOffsetX, mFoveatedOffsetY);
 		mMotionScale[0] = mRenderSizeX/2;
 		mMotionScale[1] = mRenderSizeY;
 		SetMotionScaleX(0, mMotionScale[0]);
@@ -405,6 +459,7 @@ void SkyrimUpscaler::InitUpscaler()
 			mMipLodBias = 0;
 		UnkOuterStruct::GetSingleton()->SetTAA(mEnableUpscaler);
 	}
+	SetupD3DBox(mFoveatedOffsetX, mFoveatedOffsetY);
 }
 
 void SkyrimUpscaler::InitShader()
@@ -413,6 +468,7 @@ void SkyrimUpscaler::InitShader()
 	mDevice->CreatePixelShader(cancel_jitter_ps, sizeof(cancel_jitter_ps), nullptr, &mPixelShader[0]);
 	mDevice->CreatePixelShader(blur_ps, sizeof(blur_ps), nullptr, &mPixelShader[1]);
 	mDevice->CreatePixelShader(blend_ps, sizeof(blend_ps), nullptr, &mPixelShader[2]);
+	mDevice->CreatePixelShader(debug_ps, sizeof(debug_ps), nullptr, &mPixelShader[3]);
 
 	D3D11_SAMPLER_DESC sd;
 	sd.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;

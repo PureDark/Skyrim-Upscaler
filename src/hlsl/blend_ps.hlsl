@@ -6,7 +6,7 @@ cbuffer constrant : register(b0)
 	float2 jitterOffset;
 	float2 dynamicResScale;
 	float2 screenSize;
-	float  blurIntensity;
+	float  motionSensitivity;
 	float  blendScale;
 	float4 leftRect;
 	float4 rightRect;

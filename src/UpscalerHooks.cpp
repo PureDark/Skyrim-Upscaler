@@ -9,6 +9,8 @@
 #include <Detours.h>
 #include "DRS.h"
 
+using namespace BSGraphics;
+
 static float                                                        mipLodBias = 0;
 static std::unordered_set<ID3D11SamplerState*>                      passThroughSamplers;
 static std::unordered_map<ID3D11SamplerState*, ID3D11SamplerState*> mappedSamplers;
@@ -28,9 +30,27 @@ decltype(&ID3D11DeviceContext::HSSetSamplers) ptrHSSetSamplers;
 decltype(&ID3D11DeviceContext::DSSetSamplers) ptrDSSetSamplers;
 decltype(&ID3D11DeviceContext::CSSetSamplers) ptrCSSetSamplers;
 
+decltype(&ID3D11DeviceContext::OMSetRenderTargets) ptrOMSetRenderTargets;
+decltype(&ID3D11DeviceContext::OMSetRenderTargetsAndUnorderedAccessViews) ptrOMSetRenderTargetsAndUnorderedAccessViews;
+
 static void MyLog(char* message, int size)
 {
 	logger::info("{}", message);
+}
+
+void WINAPI hk_ID3D11DeviceContext_OMSetRenderTargets(ID3D11DeviceContext* This, UINT NumViews, ID3D11RenderTargetView* const* ppRenderTargetViews, ID3D11DepthStencilView* pDepthStencilView)
+{
+	(This->*ptrOMSetRenderTargets)(NumViews, ppRenderTargetViews, pDepthStencilView);
+	if (SkyrimUpscaler::GetSingleton()->mVRS)
+		SkyrimUpscaler::GetSingleton()->mVRS->PostOMSetRenderTargets(NumViews, ppRenderTargetViews, pDepthStencilView);
+}
+
+void WINAPI hk_ID3D11DeviceContext_OMSetRenderTargetsAndUnorderedAccessViews(ID3D11DeviceContext* This, UINT NumRTVs, ID3D11RenderTargetView* const* ppRenderTargetViews, ID3D11DepthStencilView* pDepthStencilView, 
+	UINT UAVStartSlot, UINT NumUAVs, ID3D11UnorderedAccessView* const* ppUnorderedAccessViews, const UINT* pUAVInitialCounts)
+{
+	(This->*ptrOMSetRenderTargetsAndUnorderedAccessViews)(NumRTVs, ppRenderTargetViews, pDepthStencilView, UAVStartSlot, NumUAVs, ppUnorderedAccessViews, pUAVInitialCounts);
+	if (SkyrimUpscaler::GetSingleton()->mVRS)
+		SkyrimUpscaler::GetSingleton()->mVRS->PostOMSetRenderTargets(NumRTVs, ppRenderTargetViews, pDepthStencilView);
 }
 
 
@@ -247,6 +267,9 @@ HRESULT WINAPI hk_D3D11CreateDeviceAndSwapChain(
 	*(uintptr_t*)&ptrDSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_DSSetSamplers, 65);
 	*(uintptr_t*)&ptrCSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_CSSetSamplers, 70);
 
+	*(uintptr_t*)&ptrOMSetRenderTargets = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_OMSetRenderTargets, 33);
+	*(uintptr_t*)&ptrOMSetRenderTargetsAndUnorderedAccessViews = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_OMSetRenderTargetsAndUnorderedAccessViews, 34);
+
 	return hr;
 }
 
@@ -284,6 +307,14 @@ struct UpscalerHooks
 					renderTarget->QueryInterface(IID_PPV_ARGS(&targetTex));
 					SkyrimUpscaler::GetSingleton()->SetupTarget(targetTex);
 				}
+				//if (auto r = BSGraphics::Renderer::QInstance()) {
+				//	auto rt = r->pRenderTargets[RenderTargets::RENDER_TARGET_MAIN];
+				//	SkyrimUpscaler::GetSingleton()->SetupMainTarget(rt.Texture);
+				//	rt = r->pRenderTargets[RenderTargets::RENDER_TARGET_MOTION_VECTOR];
+				//	SkyrimUpscaler::GetSingleton()->SetupMotionVector(rt.Texture);
+				//	auto depthRt = r->pDepthStencils[RenderTargetsDepthStencil::DEPTH_STENCIL_TARGET_MAIN];
+				//	SkyrimUpscaler::GetSingleton()->SetupDepth(depthRt.Texture);
+				//}
 			}
 			func(param_1, param_2);
 			static ID3D11Resource*  TargetTex = nullptr;

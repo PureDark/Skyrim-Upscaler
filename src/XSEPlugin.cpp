@@ -88,8 +88,8 @@ EXTERN_C [[maybe_unused]] __declspec(dllexport) bool SKSEAPI SKSEPlugin_Load(con
 	LoadLibrary(GetLibraryPath("ffx_fsr2_api_dx12_x64.dll").c_str());
 	LoadLibrary(GetLibraryPath("dxil.dll").c_str());
 	LoadLibrary(GetLibraryPath("dxcompiler.dll").c_str());
-	LoadLibrary(GetLibraryPath("XeFX.dll").c_str());
 	LoadLibrary(GetLibraryPath("XeFX_Loader.dll").c_str());
+	LoadLibrary(GetLibraryPath("XeFX.dll").c_str());
 	LoadLibrary(GetLibraryPath("libxess.dll").c_str());
 	LoadLibrary(GetLibraryPath("PDPerfPlugin.dll").c_str());
 	logger::info("Loaded plugin");
