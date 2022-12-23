@@ -281,7 +281,7 @@ struct UpscalerHooks
 		static void thunk()
 		{
 			func();
-			//MenuOpenCloseEventHandler::Register();
+			MenuOpenCloseEventHandler::Register();
 			
 			// Depth not found at this point
 			//SkyrimUpscaler::GetSingleton()->InitUpscaler();
@@ -306,29 +306,36 @@ struct UpscalerHooks
 					ID3D11Texture2D* targetTex;
 					renderTarget->QueryInterface(IID_PPV_ARGS(&targetTex));
 					SkyrimUpscaler::GetSingleton()->SetupTarget(targetTex);
+					SkyrimUpscaler::GetSingleton()->mTargetTex.mRTV = RTV;
 				}
-				//if (auto r = BSGraphics::Renderer::QInstance()) {
-				//	auto rt = r->pRenderTargets[RenderTargets::RENDER_TARGET_MAIN];
-				//	SkyrimUpscaler::GetSingleton()->SetupMainTarget(rt.Texture);
-				//	rt = r->pRenderTargets[RenderTargets::RENDER_TARGET_MOTION_VECTOR];
-				//	SkyrimUpscaler::GetSingleton()->SetupMotionVector(rt.Texture);
-				//	auto depthRt = r->pDepthStencils[RenderTargetsDepthStencil::DEPTH_STENCIL_TARGET_MAIN];
-				//	SkyrimUpscaler::GetSingleton()->SetupDepth(depthRt.Texture);
-				//}
+			}
+			if (SkyrimUpscaler::GetSingleton()->m_runtime != nullptr) {
+				if (SkyrimUpscaler::GetSingleton()->m_rtv.handle == 0)
+					SkyrimUpscaler::GetSingleton()->m_rtv = { reinterpret_cast<uintptr_t>(SkyrimUpscaler::GetSingleton()->mTargetTex.mRTV) };
+				SkyrimUpscaler::GetSingleton()->m_runtime->render_effects(SkyrimUpscaler::GetSingleton()->m_runtime->get_command_queue()->get_immediate_command_list(), SkyrimUpscaler::GetSingleton()->m_rtv, SkyrimUpscaler::GetSingleton()->m_rtv);
 			}
 			func(param_1, param_2);
-			static ID3D11Resource*  TargetTex = nullptr;
-			static ID3D11Resource*  DepthTex = nullptr;
-			static ID3D11RenderTargetView*  RTV = nullptr;
-			static ID3D11DepthStencilView*  DSV = nullptr;
-			if (TargetTex == nullptr) {
+			static ImageWrapper             TargetTex{ nullptr };
+			static ImageWrapper             DepthTex{ nullptr };
+			if (TargetTex.mImage == nullptr) {
+				ID3D11RenderTargetView* RTV = nullptr;
+				ID3D11DepthStencilView* DSV = nullptr;
 				SkyrimUpscaler::GetSingleton()->mContext->OMGetRenderTargets(1, &RTV, &DSV);
-				if (RTV != nullptr)
-					RTV->GetResource(&TargetTex);
-				if (DSV != nullptr)
-					DSV->GetResource(&DepthTex);
+				if (RTV != nullptr) {
+					ID3D11Resource* resource;
+					RTV->GetResource(&resource);
+					TargetTex.mImage = (ID3D11Texture2D*)resource;
+					TargetTex.mRTV = RTV;
+				}
+				if (DSV != nullptr) {
+					ID3D11Resource* resource;
+					DSV->GetResource(&resource);
+					DepthTex.mImage = (ID3D11Texture2D*)resource;
+					DepthTex.mDSV = DSV;
+				}
 			}
-			SkyrimUpscaler::GetSingleton()->Evaluate(TargetTex, DSV);
+			SkyrimUpscaler::GetSingleton()->Evaluate(TargetTex.mImage, DepthTex.mDSV);
+			SkyrimUpscaler::GetSingleton()->DelayEnable();
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
@@ -359,12 +366,31 @@ struct UpscalerHooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
+	struct TakeScreenshot
+	{
+		static INT32 thunk(INT64 a1, INT64 a2, char* dest, UINT32 type)
+		{
+			return func(a1, a2, dest, type);
+		}
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct WriteScreenshot
+	{
+		static INT64 thunk(INT64 a1, UINT32 a2, INT64 a3, const wchar_t* dest)
+		{
+			return func(a1, a2, a3, dest);
+		}
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+
 	static void Install()
 	{
 		if (REL::Module::IsVR()) {
 			// Hook for getting the swapchain
 			// Nope, depth and motion texture are already created after this function, so can't use it
-			// stl::write_thunk_call<BSGraphics_Renderer_Init_InitD3D>(REL::RelocationID(75595, 77226).address() + REL::Relocate(0x50, 0x2BC));
+			stl::write_thunk_call<BSGraphics_Renderer_Init_InitD3D>(REL::RelocationID(75595, 77226).address() + REL::Relocate(0x50, 0x2BC));
 			// Have to hook the creation of SwapChain to hook CreateTexture2D before depth and motion textures are created
 			char* ptr = nullptr;
 			auto  moduleBase = (uintptr_t)GetModuleHandle(ptr);
@@ -384,6 +410,10 @@ struct UpscalerHooks
 			REL::safe_write<uint8_t>(buildCameraStateDataHook.address() + 0x34, patch3);
 			// Pre-UI Hook for upscaling specifically for VR
 			stl::write_thunk_call<BSImagespaceShader_Hook_VR>(REL::Offset(0x132c827).address());
+
+			// Fixing screenshot with DRS
+			//stl::write_thunk_call<TakeScreenshot>(REL::RelocationID(35882, 36853).address() + REL::Relocate(0x73, 0x69));
+			//stl::write_thunk_call<WriteScreenshot>(REL::RelocationID(75598, 77406).address() + REL::Relocate(0x13B, 0x143));
 		}
 		logger::info("Installed upscaler hooks");
 	}

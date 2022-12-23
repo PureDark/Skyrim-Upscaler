@@ -117,3 +117,48 @@ EXTERN_C [[maybe_unused]] __declspec(dllexport) bool SKSEAPI SKSEPlugin_Query(co
 	pluginInfo->version = SKSEPlugin_Version.pluginVersion;
 	return true;
 }
+
+static void on_init_effect_runtime(effect_runtime* runtime)
+{
+	uint32_t width, height;
+	runtime->get_screenshot_width_and_height(&width, &height);
+	if (width > 1024 && height > 1024) {
+		SkyrimUpscaler::GetSingleton()->m_runtime = runtime;
+	}
+}
+
+void register_addon_events()
+{
+	reshade::register_event<reshade::addon_event::init_effect_runtime>(on_init_effect_runtime);
+}
+
+void unregister_addon_events()
+{
+	reshade::unregister_event<reshade::addon_event::init_effect_runtime>(on_init_effect_runtime);
+}
+
+extern "C" __declspec(dllexport) const char* NAME = "Skyrim Upscaler";
+extern "C" __declspec(dllexport) const char* DESCRIPTION = "Apply effects to correct rendertargets in VR";
+static bool ReShadeInstalled = false;
+
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID)
+{
+	switch (fdwReason) {
+	case DLL_PROCESS_ATTACH:
+		ReShadeInstalled = true;
+		if (!reshade::register_addon(hModule)) {
+			ReShadeInstalled = false;
+			return TRUE;
+		}
+		register_addon_events();
+		break;
+	case DLL_PROCESS_DETACH:
+		if (ReShadeInstalled) {
+			unregister_addon_events();
+			reshade::unregister_addon(hModule);
+		}
+		break;
+	}
+
+	return TRUE;
+}

@@ -44,6 +44,14 @@ public:
 		}
 		return mDSV;
 	}
+	D3D11_TEXTURE2D_DESC GetDesc()
+	{
+		D3D11_TEXTURE2D_DESC desc;
+		if (mImage != nullptr) {
+			mImage->GetDesc(&desc);
+		}
+		return desc;
+	}
 	void Release()
 	{
 		if (mRTV) {
@@ -69,10 +77,11 @@ class D3D11VariableRateShading
 {
 public:
 	bool  mEnableFixedFoveatedRendering = false;
-	float mInnerRadius = 0.6f;
+	float mInnerRadius = 0.7f;
 	float mMiddleRadius = 0.8f;
-	float mOutterRadius = 1.0f;
-	float mWiden = 1.0f;
+	float mOutterRadius = 0.9f;
+	float mCutoutRadius = 1.2f;
+	float mWiden = 1.5f;
 	bool  mNeedUpdate = false;
 
 	ImageWrapper                     combinedVRSTex{ nullptr };
@@ -111,7 +120,7 @@ private:
 
 	void SetupCombinedVRS();
 
-	uint8_t DistanceToVRSLevel(float distance);
+	uint8_t              DistanceToVRSLevel(float distance);
 	std::vector<uint8_t> CreateCombinedFixedFoveatedVRSPattern(int width, int height, int renderWidth, int renderHeight);
 	std::vector<uint8_t> CreateCombinedFixedFoveatedVRSPatternDebug(int width, int height, int renderWidth, int renderHeight);
 };

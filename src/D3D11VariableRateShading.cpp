@@ -2,11 +2,6 @@
 #include "SkyrimUpscaler.h"
 #include "DRS.h"
 
-// COM-like Release macro
-#ifndef SAFE_RELEASE
-	#define SAFE_RELEASE(a) if (a) { a->Release(); a = NULL; }
-#endif
-
 uint8_t D3D11VariableRateShading::DistanceToVRSLevel(float distance)
 {
 	if (distance < mInnerRadius) {
@@ -18,7 +13,10 @@ uint8_t D3D11VariableRateShading::DistanceToVRSLevel(float distance)
 	if (distance < mOutterRadius) {
 		return 2;
 	}
-	return 3;
+	if (distance < mCutoutRadius) {
+		return 3;
+	}
+	return 4;
 }
 
 std::vector<uint8_t> D3D11VariableRateShading::CreateCombinedFixedFoveatedVRSPattern(int width, int height, int renderWidth, int renderHeight)
@@ -35,13 +33,31 @@ std::vector<uint8_t> D3D11VariableRateShading::CreateCombinedFixedFoveatedVRSPat
 			float fx = float(x) / renderWidth;
 			float fy = float(y) / renderHeight;
 			float distance = 2 * sqrtf((fx - leftProjX) * (fx - leftProjX) * 4 / mWiden + (fy - leftProjY) * (fy - leftProjY));
-			data[y * width + x] = DistanceToVRSLevel(distance);
+			float VRSLevel = DistanceToVRSLevel(distance);
+			if (VRSLevel == 0) {
+				float distance1 = 2 * sqrtf((fx - leftProjX) * (fx - leftProjX) * 4 / mWiden + (fy - leftProjY) * (fy - leftProjY) * 2);
+				float distance2 = 2 * sqrtf((fx - leftProjX) * (fx - leftProjX) * 8 / mWiden + (fy - leftProjY) * (fy - leftProjY));
+				float VRSLevel1 = DistanceToVRSLevel(distance1);
+				float VRSLevel2 = DistanceToVRSLevel(distance2);
+				if (VRSLevel1 != 0 && VRSLevel2 != 0)
+					VRSLevel = 1;
+			}
+			data[y * width + x] = VRSLevel;
 		}
 		for (int x = divideWidth; x < renderWidth; ++x) {
 			float fx = float(x) / renderWidth;
 			float fy = float(y) / renderHeight;
 			float distance = 2 * sqrtf((fx - rightProjX) * (fx - rightProjX) * 4 / mWiden + (fy - rightProjY) * (fy - rightProjY));
-			data[y * width + x] = DistanceToVRSLevel(distance);
+			float VRSLevel = DistanceToVRSLevel(distance);
+			if (VRSLevel == 0) {
+				float distance1 = 2 * sqrtf((fx - rightProjX) * (fx - rightProjX) * 4 / mWiden + (fy - rightProjY) * (fy - rightProjY) * 2);
+				float distance2 = 2 * sqrtf((fx - rightProjX) * (fx - rightProjX) * 8 / mWiden + (fy - rightProjY) * (fy - rightProjY));
+				float VRSLevel1 = DistanceToVRSLevel(distance1);
+				float VRSLevel2 = DistanceToVRSLevel(distance2);
+				if (VRSLevel1 != 0 && VRSLevel2 != 0)
+					VRSLevel = 1;
+			}
+			data[y * width + x] = VRSLevel;
 		}
 		for (int x = renderWidth; x < width; ++x) {
 			data[y * width + x] = 3;
@@ -70,9 +86,18 @@ std::vector<uint8_t> D3D11VariableRateShading::CreateCombinedFixedFoveatedVRSPat
 			float fx = float(x) / renderWidth;
 			float fy = float(y) / renderHeight;
 			float distance = 2 * sqrtf((fx - leftProjX) * (fx - leftProjX) * 4 / mWiden + (fy - leftProjY) * (fy - leftProjY));
-			data[(y * width + x) * 4] = DistanceToVRSLevel(distance) * 85;
-			data[(y * width + x) * 4 + 1] = DistanceToVRSLevel(distance) * 85;
-			data[(y * width + x) * 4 + 2] = DistanceToVRSLevel(distance) * 85;
+			float VRSLevel = DistanceToVRSLevel(distance);
+			if (VRSLevel == 0) {
+				float distance1 = 2 * sqrtf((fx - leftProjX) * (fx - leftProjX) * 4 / mWiden + (fy - leftProjY) * (fy - leftProjY) * 2);
+				float distance2 = 2 * sqrtf((fx - leftProjX) * (fx - leftProjX) * 8 / mWiden + (fy - leftProjY) * (fy - leftProjY));
+				float VRSLevel1 = DistanceToVRSLevel(distance1);
+				float VRSLevel2 = DistanceToVRSLevel(distance2);
+				if (VRSLevel1 != 0 && VRSLevel2 != 0)
+					VRSLevel = 1;
+			}
+			data[(y * width + x) * 4] = VRSLevel * 63;
+			data[(y * width + x) * 4 + 1] = VRSLevel * 63;
+			data[(y * width + x) * 4 + 2] = VRSLevel * 63;
 			data[(y * width + x) * 4 + 3] = 255;
 			if (SkyrimUpscaler::GetSingleton()->InFoveatedRect(fx, fy))
 				data[(y * width + x) * 4 + 2] = 255;
@@ -81,9 +106,18 @@ std::vector<uint8_t> D3D11VariableRateShading::CreateCombinedFixedFoveatedVRSPat
 			float fx = float(x) / renderWidth;
 			float fy = float(y) / renderHeight;
 			float distance = 2 * sqrtf((fx - rightProjX) * (fx - rightProjX) * 4 / mWiden + (fy - rightProjY) * (fy - rightProjY));
-			data[(y * width + x) * 4] = DistanceToVRSLevel(distance) * 85;
-			data[(y * width + x) * 4 + 1] = DistanceToVRSLevel(distance) * 85;
-			data[(y * width + x) * 4 + 2] = DistanceToVRSLevel(distance) * 85;
+			float VRSLevel = DistanceToVRSLevel(distance);
+			if (VRSLevel == 0) {
+				float distance1 = 2 * sqrtf((fx - rightProjX) * (fx - rightProjX) * 4 / mWiden + (fy - rightProjY) * (fy - rightProjY) * 2);
+				float distance2 = 2 * sqrtf((fx - rightProjX) * (fx - rightProjX) * 8 / mWiden + (fy - rightProjY) * (fy - rightProjY));
+				float VRSLevel1 = DistanceToVRSLevel(distance1);
+				float VRSLevel2 = DistanceToVRSLevel(distance2);
+				if (VRSLevel1 != 0 && VRSLevel2 != 0)
+					VRSLevel = 1;
+			}
+			data[(y * width + x) * 4] = VRSLevel * 63;
+			data[(y * width + x) * 4 + 1] = VRSLevel * 63;
+			data[(y * width + x) * 4 + 2] = VRSLevel * 63;
 			data[(y * width + x) * 4 + 3] = 255;
 			if (SkyrimUpscaler::GetSingleton()->InFoveatedRect(fx, fy))
 				data[(y * width + x) * 4 + 2] = 255;
@@ -232,11 +266,12 @@ void D3D11VariableRateShading::EnableVRS()
 	NV_D3D11_VIEWPORT_SHADING_RATE_DESC vsrd[2];
 	for (int i = 0; i < 2; ++i) {
 		vsrd[i].enableVariablePixelShadingRate = true;
-		memset(vsrd[i].shadingRateTable, 5, sizeof(vsrd[i].shadingRateTable));
+		memset(vsrd[i].shadingRateTable, NV_PIXEL_X1_PER_RASTER_PIXEL, sizeof(vsrd[i].shadingRateTable));
 		vsrd[i].shadingRateTable[0] = NV_PIXEL_X1_PER_RASTER_PIXEL;
 		vsrd[i].shadingRateTable[1] = NV_PIXEL_X1_PER_2X1_RASTER_PIXELS;
 		vsrd[i].shadingRateTable[2] = NV_PIXEL_X1_PER_2X2_RASTER_PIXELS;
 		vsrd[i].shadingRateTable[3] = NV_PIXEL_X1_PER_4X4_RASTER_PIXELS;
+		vsrd[i].shadingRateTable[4] = NV_PIXEL_X0_CULL_RASTER_PIXELS;
 	}
 	NV_D3D11_VIEWPORTS_SHADING_RATE_DESC srd;
 	srd.version = NV_D3D11_VIEWPORTS_SHADING_RATE_DESC_VER;
@@ -257,7 +292,8 @@ void D3D11VariableRateShading::SetupCombinedVRS()
 	int vrsHeight = mDisplaySizeY / NV_VARIABLE_PIXEL_SHADING_TILE_HEIGHT;
 	if (vrsHeight & 1)
 		++vrsHeight;
-	if (!mNeedUpdate && (!IsEnabled() || (combinedVRSTex.mImage && vrsWidth == combinedWidth && vrsHeight == combinedHeight))) {
+	bool imageSizeChanged = (combinedVRSTex.mImage && vrsWidth == combinedWidth && vrsHeight == combinedHeight);
+	if (!mNeedUpdate && (!IsEnabled() || imageSizeChanged)) {
 		return;
 	}
 
@@ -270,61 +306,69 @@ void D3D11VariableRateShading::SetupCombinedVRS()
 		++vrsRenderHeight;
 
 	mNeedUpdate = false;
-	combinedVRSTex.Release();
-	combinedVRSShowTex.Release();
-	SAFE_RELEASE(combinedVRSView);
 
 	combinedWidth = vrsWidth;
 	combinedHeight = vrsHeight;
 
-	logger::info("Creating combined VRS pattern texture of size  {}x{} for input texture size {}x{} and render size {}x{}", vrsWidth, vrsHeight, mDisplaySizeX, mDisplaySizeY, mRenderSizeX, mRenderSizeY);
+	if (imageSizeChanged || !combinedVRSTex.mImage) {
+		logger::info("Creating combined VRS pattern texture of size  {}x{} for input texture size {}x{} and render size {}x{}", vrsWidth, vrsHeight, mDisplaySizeX, mDisplaySizeY, mRenderSizeX, mRenderSizeY);
+		combinedVRSTex.Release();
+		combinedVRSShowTex.Release();
+		SAFE_RELEASE(combinedVRSView);
 
-	D3D11_TEXTURE2D_DESC td = {};
-	td.Width = vrsWidth;
-	td.Height = vrsHeight;
-	td.ArraySize = 1;
-	td.Format = DXGI_FORMAT_R8_UINT;
-	td.SampleDesc.Count = 1;
-	td.SampleDesc.Quality = 0;
-	td.Usage = D3D11_USAGE_DEFAULT;
-	td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-	td.CPUAccessFlags = 0;
-	td.MiscFlags = 0;
-	td.MipLevels = 1;
-	auto data = CreateCombinedFixedFoveatedVRSPattern(vrsWidth, vrsHeight, vrsRenderWidth, vrsRenderHeight);
-	D3D11_SUBRESOURCE_DATA srd;
-	srd.pSysMem = data.data();
-	srd.SysMemPitch = vrsWidth;
-	srd.SysMemSlicePitch = 0;
-	HRESULT result = device->CreateTexture2D(&td, &srd, &combinedVRSTex.mImage);
-	if (FAILED(result)) {
-		Shutdown();
-		logger::error("Failed to create combined VRS pattern texture:  {}", result);
-		return;
-	}
-	td.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	auto data2 = CreateCombinedFixedFoveatedVRSPatternDebug(vrsWidth, vrsHeight, vrsRenderWidth, vrsRenderHeight);
-	srd.pSysMem = data2.data();
-	srd.SysMemPitch = vrsWidth * 4;
-	srd.SysMemSlicePitch = 0;
-	result = device->CreateTexture2D(&td, &srd, &combinedVRSShowTex.mImage);
-	if (FAILED(result)) {
-		Shutdown();
-		logger::error("Failed to create combined VRS pattern debug texture:  {}", result);
-		return;
-	}
+		D3D11_TEXTURE2D_DESC td = {};
+		td.Width = vrsWidth;
+		td.Height = vrsHeight;
+		td.ArraySize = 1;
+		td.Format = DXGI_FORMAT_R8_UINT;
+		td.SampleDesc.Count = 1;
+		td.SampleDesc.Quality = 0;
+		td.Usage = D3D11_USAGE_DEFAULT;
+		td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+		td.CPUAccessFlags = 0;
+		td.MiscFlags = 0;
+		td.MipLevels = 1;
+		auto                   data = CreateCombinedFixedFoveatedVRSPattern(vrsWidth, vrsHeight, vrsRenderWidth, vrsRenderHeight);
+		D3D11_SUBRESOURCE_DATA srd;
+		srd.pSysMem = data.data();
+		srd.SysMemPitch = vrsWidth;
+		srd.SysMemSlicePitch = 0;
+		HRESULT result = device->CreateTexture2D(&td, &srd, &combinedVRSTex.mImage);
+		if (FAILED(result)) {
+			Shutdown();
+			logger::error("Failed to create combined VRS pattern texture:  {}", result);
+			return;
+		}
+		td.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+		auto data2 = CreateCombinedFixedFoveatedVRSPatternDebug(vrsWidth, vrsHeight, vrsRenderWidth, vrsRenderHeight);
+		srd.pSysMem = data2.data();
+		srd.SysMemPitch = vrsWidth * 4;
+		srd.SysMemSlicePitch = 0;
+		result = device->CreateTexture2D(&td, &srd, &combinedVRSShowTex.mImage);
+		if (FAILED(result)) {
+			Shutdown();
+			logger::error("Failed to create combined VRS pattern debug texture:  {}", result);
+			return;
+		}
 
-	logger::info("Creating combined shading rate resource view");
-	td.Format = DXGI_FORMAT_R8_UINT;
-	NV_D3D11_SHADING_RATE_RESOURCE_VIEW_DESC vd = {};
-	vd.version = NV_D3D11_SHADING_RATE_RESOURCE_VIEW_DESC_VER;
-	vd.Format = td.Format;
-	vd.ViewDimension = NV_SRRV_DIMENSION_TEXTURE2D;
-	vd.Texture2D.MipSlice = 0;
-	NvAPI_Status status = NvAPI_D3D11_CreateShadingRateResourceView(device, combinedVRSTex.mImage, &vd, &combinedVRSView);
-	if (status != NVAPI_OK) {
-		Shutdown();
-		logger::error("Failed to create combined VRS pattern view:  {}", result);
-		return;
+		logger::info("Creating combined shading rate resource view");
+		td.Format = DXGI_FORMAT_R8_UINT;
+		NV_D3D11_SHADING_RATE_RESOURCE_VIEW_DESC vd = {};
+		vd.version = NV_D3D11_SHADING_RATE_RESOURCE_VIEW_DESC_VER;
+		vd.Format = td.Format;
+		vd.ViewDimension = NV_SRRV_DIMENSION_TEXTURE2D;
+		vd.Texture2D.MipSlice = 0;
+		NvAPI_Status status = NvAPI_D3D11_CreateShadingRateResourceView(device, combinedVRSTex.mImage, &vd, &combinedVRSView);
+		if (status != NVAPI_OK) {
+			Shutdown();
+			logger::error("Failed to create combined VRS pattern view:  {}", result);
+			return;
+		}
+	} else {
+		auto data = CreateCombinedFixedFoveatedVRSPattern(vrsWidth, vrsHeight, vrsRenderWidth, vrsRenderHeight);
+		context->UpdateSubresource(combinedVRSTex.mImage, 0, NULL, data.data(), 0, 0);
+		data = CreateCombinedFixedFoveatedVRSPatternDebug(vrsWidth, vrsHeight, vrsRenderWidth, vrsRenderHeight);
+		context->UpdateSubresource(combinedVRSShowTex.mImage, 0, NULL, data.data(), 0, 0);
 	}
+	
 }

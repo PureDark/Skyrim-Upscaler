@@ -41,18 +41,21 @@ void SkyrimUpscaler::LoadINI()
 	GetSettingFloat("FixedFoveatedUpscaling", mFoveatedOffsetY, 0.04f);
 
 	bool  mEnableFixedFoveatedRendering;
-	float mInnerRadius, mMiddleRadius, mOutterRadius;
+	float mInnerRadius, mMiddleRadius, mOutterRadius, mCutoutRadius;
 	float mWiden;
 	GetSettingFloat("FixedFoveatedRendering", mEnableFixedFoveatedRendering, false);
-	GetSettingFloat("FixedFoveatedRendering", mInnerRadius, 0.6f);
+	GetSettingFloat("FixedFoveatedRendering", mInnerRadius, 0.7f);
 	GetSettingFloat("FixedFoveatedRendering", mMiddleRadius, 0.8f);
-	GetSettingFloat("FixedFoveatedRendering", mOutterRadius, 1.0f);
+	GetSettingFloat("FixedFoveatedRendering", mOutterRadius, 0.9f);
+	GetSettingFloat("FixedFoveatedRendering", mCutoutRadius, 1.2f);
 	GetSettingFloat("FixedFoveatedRendering", mWiden, 1.0f);
 	mVRS->mEnableFixedFoveatedRendering = mEnableFixedFoveatedRendering;
 	mVRS->mInnerRadius = std::clamp(mInnerRadius, 0.0f, 1.0f);
 	mVRS->mMiddleRadius = std::clamp(mMiddleRadius, 0.0f, 1.2f);
 	mVRS->mOutterRadius = std::clamp(mOutterRadius, 0.0f, 1.5f);
+	mVRS->mCutoutRadius = std::clamp(mCutoutRadius, 0.0f, 2.0f);
 	mVRS->mWiden = std::clamp(mWiden, 0.1f, 4.0f);
+	mEnableDelayCount = -1;
 
 	auto bFXAAEnabled = RE::GetINISetting("bFXAAEnabled:Display");
 	if (!REL::Module::IsVR()) {
@@ -236,8 +239,8 @@ void SkyrimUpscaler::Evaluate(ID3D11Resource* destTex, ID3D11DepthStencilView* d
 					ID3D11ShaderResourceView* srvs[1] = { mVRS->combinedVRSShowTex.GetSRV()};
 					RenderTexture(3, 1, srvs, dsv, dest.GetRTV(), mDisplaySizeX, mDisplaySizeY);
 				}
-				float color[4] = { 0, 0, 0, 1 };
-				mContext->ClearRenderTargetView(mTargetTex.GetRTV(), color);
+				//float color[4] = { 0, 0, 0, 1 };
+				//mContext->ClearRenderTargetView(mTargetTex.GetRTV(), color);
 			}
 		}
 	}
@@ -298,6 +301,15 @@ bool SkyrimUpscaler::IsEnabled()
 	return mEnableUpscaler;
 }
 
+void SkyrimUpscaler::DelayEnable()
+{
+	if (mEnableDelayCount > 0)
+		mEnableDelayCount--;
+	if (mEnableDelayCount == 0) {
+		mEnableDelayCount = -1;
+		SetEnabled(mDelayEnable);
+	}
+}
 
 void SkyrimUpscaler::GetJitters(float* out_x, float* out_y)
 {

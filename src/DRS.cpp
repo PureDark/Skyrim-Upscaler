@@ -93,8 +93,12 @@ RE::BSEventNotifyControl MenuOpenCloseEventHandler::ProcessEvent(const RE::MenuO
 	} else if (a_event->menuName == RE::LoadingMenu::MENU_NAME) {
 		if (a_event->opening) {
 			DRS::GetSingleton()->isInLoadingMenu = true;
+			SkyrimUpscaler::GetSingleton()->mDelayEnable = SkyrimUpscaler::GetSingleton()->mEnableUpscaler;
+			SkyrimUpscaler::GetSingleton()->mEnableUpscaler = false;
 		} else {
 			DRS::GetSingleton()->isInLoadingMenu = false;
+			if (SkyrimUpscaler::GetSingleton()->mDelayEnable)
+				SkyrimUpscaler::GetSingleton()->mEnableDelayCount = 120;
 		}
 	}
 	if (a_event->menuName == RE::MainMenu::MENU_NAME ||

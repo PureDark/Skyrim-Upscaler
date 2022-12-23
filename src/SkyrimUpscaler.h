@@ -7,6 +7,16 @@
 #include <d3d11_4.h>
 #include <SettingGUI.h>
 #include <D3D11VariableRateShading.h>
+#include <ReShade/reshade.hpp>
+using namespace reshade::api;
+
+#ifndef max
+#	define max(a, b) (((a) > (b)) ? (a) : (b))
+#endif
+
+#ifndef SAFE_RELEASE
+	#define SAFE_RELEASE(a) if (a) { a->Release(); a = NULL; }
+#endif
 
 struct UnkOuterStruct
 {
@@ -101,6 +111,9 @@ public:
 	bool mDebug5{ false };
 	bool mDebug6{ false };
 
+	bool mDelayEnable = false;
+	int  mEnableDelayCount{ 0 };
+
 	float mCancelScaleX{ 0.5f };
 	float mCancelScaleY{ 0.5f };
 	float mBlurIntensity{ 1.5f };
@@ -150,6 +163,9 @@ public:
 
 	D3D11VariableRateShading* mVRS{ nullptr };
 
+	effect_runtime* m_runtime{ nullptr };
+	resource_view   m_rtv{ 0 };
+
 	~SkyrimUpscaler() {}
 
 	static SkyrimUpscaler* GetSingleton()
@@ -170,6 +186,7 @@ public:
 		float jitterOffsetX, float jitterOffsetY, int motionScaleX, int motionScaleY, bool reset, float nearPlane, float farPlane, float verticalFOV, bool execute = true);
 
 	bool IsEnabled();
+	void DelayEnable();
 
 	void GetJitters(float* out_x, float* out_y);
 	void SetJitterOffsets(float x, float y);

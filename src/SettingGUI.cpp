@@ -67,10 +67,6 @@ void SettingGUI::InitIMGUI(IDXGISwapChain* swapchain, ID3D11Device* device, ID3D
 		logger::info("SettingGUI::InitIMGUI Success!");
 }
 
-#ifndef max
-#	define max(a, b) (((a) > (b)) ? (a) : (b))
-#endif
-
 ImVec2 GetTextureDimensions(ID3D11ShaderResourceView* view)
 {
 	ID3D11Resource* res = nullptr;
@@ -99,13 +95,13 @@ void SettingGUI::OnRender()
 	if (REL::Module::IsVR()) {
 		ProcessEvent(mToggleHotkey, SkyrimUpscaler::GetSingleton()->mToggleUpscaler);
 	}
-	
+
 	if (ImGui::IsKeyReleased(mToggleHotkey))
 		toggle();
 	if (ImGui::IsKeyReleased(SkyrimUpscaler::GetSingleton()->mToggleUpscaler))
 		SkyrimUpscaler::GetSingleton()->SetEnabled(!SkyrimUpscaler::GetSingleton()->mEnableUpscaler);
 
-	auto&  io = ImGui::GetIO();
+	auto& io = ImGui::GetIO();
 	io.MouseDrawCursor = mShowGUI;
 
 	// Start the Dear ImGui frame
@@ -134,7 +130,7 @@ void SettingGUI::OnRender()
 
 	if (mShowGUI) {
 		// Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
-		ImGui::Begin("Skyrim Upscaler Settings", &mShowGUI, ImGuiWindowFlags_NoCollapse);  
+		ImGui::Begin("Skyrim Upscaler Settings", &mShowGUI, ImGuiWindowFlags_NoCollapse);
 		//ImGui::SetWindowSize(ImVec2(576, 340), 0.9f);
 		if (ImGui::Checkbox("Enable", &SkyrimUpscaler::GetSingleton()->mEnableUpscaler)) {
 			SkyrimUpscaler::GetSingleton()->SetEnabled(SkyrimUpscaler::GetSingleton()->mEnableUpscaler);
@@ -316,15 +312,73 @@ void SettingGUI::OnRender()
 		}
 		ImGui::Spacing();
 		ImGui::Checkbox("Enable Fixed Foveated Rendering", &SkyrimUpscaler::GetSingleton()->mVRS->mEnableFixedFoveatedRendering);
+		//Inner Radius
+		if (ImGui::ArrowButton("mVRS->mInnerRadius+", ImGuiDir_Left)) {
+			SkyrimUpscaler::GetSingleton()->mVRS->mInnerRadius -= 0.01f;
+			SkyrimUpscaler::GetSingleton()->mVRS->mNeedUpdate = true;
+		}
+		ImGui::SameLine(0, 4.0f);
+		if (ImGui::ArrowButton("mVRS->mInnerRadius-", ImGuiDir_Right)) {
+			SkyrimUpscaler::GetSingleton()->mVRS->mInnerRadius += 0.01f;
+			SkyrimUpscaler::GetSingleton()->mVRS->mNeedUpdate = true;
+		}
+		ImGui::SameLine(0, 4.0f);
 		if (ImGui::DragFloat("Inner Radius", &SkyrimUpscaler::GetSingleton()->mVRS->mInnerRadius, 0.01f, 0.0f, 1.0f)) {
 			SkyrimUpscaler::GetSingleton()->mVRS->mNeedUpdate = true;
 		};
+		//Middle Radius
+		if (ImGui::ArrowButton("mVRS->mMiddleRadius+", ImGuiDir_Left)) {
+			SkyrimUpscaler::GetSingleton()->mVRS->mMiddleRadius -= 0.01f;
+			SkyrimUpscaler::GetSingleton()->mVRS->mNeedUpdate = true;
+		}
+		ImGui::SameLine(0, 4.0f);
+		if (ImGui::ArrowButton("mVRS->mMiddleRadius-", ImGuiDir_Right)) {
+			SkyrimUpscaler::GetSingleton()->mVRS->mMiddleRadius += 0.01f;
+			SkyrimUpscaler::GetSingleton()->mVRS->mNeedUpdate = true;
+		}
+		ImGui::SameLine(0, 4.0f);
 		if (ImGui::DragFloat("Middle Radius", &SkyrimUpscaler::GetSingleton()->mVRS->mMiddleRadius, 0.01f, 0.0f, 1.2f)) {
 			SkyrimUpscaler::GetSingleton()->mVRS->mNeedUpdate = true;
 		};
+		//Outter Radius
+		if (ImGui::ArrowButton("mVRS->mOutterRadius+", ImGuiDir_Left)) {
+			SkyrimUpscaler::GetSingleton()->mVRS->mOutterRadius -= 0.01f;
+			SkyrimUpscaler::GetSingleton()->mVRS->mNeedUpdate = true;
+		}
+		ImGui::SameLine(0, 4.0f);
+		if (ImGui::ArrowButton("mVRS->mOutterRadius-", ImGuiDir_Right)) {
+			SkyrimUpscaler::GetSingleton()->mVRS->mOutterRadius += 0.01f;
+			SkyrimUpscaler::GetSingleton()->mVRS->mNeedUpdate = true;
+		}
+		ImGui::SameLine(0, 4.0f);
 		if (ImGui::DragFloat("Outter Radius", &SkyrimUpscaler::GetSingleton()->mVRS->mOutterRadius, 0.01f, 0.0f, 1.5f)) {
 			SkyrimUpscaler::GetSingleton()->mVRS->mNeedUpdate = true;
 		};
+		//Cutout Radius
+		if (ImGui::ArrowButton("mVRS->mCutoutRadius+", ImGuiDir_Left)) {
+			SkyrimUpscaler::GetSingleton()->mVRS->mCutoutRadius -= 0.01f;
+			SkyrimUpscaler::GetSingleton()->mVRS->mNeedUpdate = true;
+		}
+		ImGui::SameLine(0, 4.0f);
+		if (ImGui::ArrowButton("mVRS->mCutoutRadius-", ImGuiDir_Right)) {
+			SkyrimUpscaler::GetSingleton()->mVRS->mCutoutRadius += 0.01f;
+			SkyrimUpscaler::GetSingleton()->mVRS->mNeedUpdate = true;
+		}
+		ImGui::SameLine(0, 4.0f);
+		if (ImGui::DragFloat("Cutout Radius", &SkyrimUpscaler::GetSingleton()->mVRS->mCutoutRadius, 0.01f, 0.0f, 1.5f)) {
+			SkyrimUpscaler::GetSingleton()->mVRS->mNeedUpdate = true;
+		};
+		//Widden
+		if (ImGui::ArrowButton("mVRS->mWiden+", ImGuiDir_Left)) {
+			SkyrimUpscaler::GetSingleton()->mVRS->mWiden -= 0.01f;
+			SkyrimUpscaler::GetSingleton()->mVRS->mNeedUpdate = true;
+		}
+		ImGui::SameLine(0, 4.0f);
+		if (ImGui::ArrowButton("mVRS->mWiden-", ImGuiDir_Right)) {
+			SkyrimUpscaler::GetSingleton()->mVRS->mWiden += 0.01f;
+			SkyrimUpscaler::GetSingleton()->mVRS->mNeedUpdate = true;
+		}
+		ImGui::SameLine(0, 4.0f);
 		if (ImGui::DragFloat("Widen", &SkyrimUpscaler::GetSingleton()->mVRS->mWiden, 0.01f, 0.1f, 4.0f)) {
 			SkyrimUpscaler::GetSingleton()->mVRS->mNeedUpdate = true;
 		};
@@ -418,34 +472,89 @@ RE::BSEventNotifyControl InputListener::ProcessEvent(RE::InputEvent* const* a_ev
 			auto     scan_code = button->GetIDCode();
 			uint32_t key = MapVirtualKeyEx(scan_code, MAPVK_VSC_TO_VK_EX, GetKeyboardLayout(0));
 			switch (scan_code) {
-                case DIK_LEFTARROW: key = VK_LEFT; break;
-                case DIK_RIGHTARROW: key = VK_RIGHT; break;
-                case DIK_UPARROW: key = VK_UP; break;
-                case DIK_DOWNARROW: key = VK_DOWN; break;
-                case DIK_DELETE: key = VK_DELETE; break;
-                case DIK_END: key = VK_END; break;
-                case DIK_HOME: key = VK_HOME; break;   // pos1
-                case DIK_PRIOR: key = VK_PRIOR; break; // page up
-                case DIK_NEXT: key = VK_NEXT; break;   // page down
-                case DIK_INSERT: key = VK_INSERT; break;
-                case DIK_NUMPAD0: key = VK_NUMPAD0; break;
-                case DIK_NUMPAD1: key = VK_NUMPAD1; break;
-                case DIK_NUMPAD2: key = VK_NUMPAD2; break;
-                case DIK_NUMPAD3: key = VK_NUMPAD3; break;
-                case DIK_NUMPAD4: key = VK_NUMPAD4; break;
-                case DIK_NUMPAD5: key = VK_NUMPAD5; break;
-                case DIK_NUMPAD6: key = VK_NUMPAD6; break;
-                case DIK_NUMPAD7: key = VK_NUMPAD7; break;
-                case DIK_NUMPAD8: key = VK_NUMPAD8; break;
-                case DIK_NUMPAD9: key = VK_NUMPAD9; break;
-                case DIK_DECIMAL: key = VK_DECIMAL; break;
-                case DIK_NUMPADENTER: key = IM_VK_KEYPAD_ENTER; break;
-                case DIK_RMENU: key = VK_RMENU; break;       // right alt
-                case DIK_RCONTROL: key = VK_RCONTROL; break; // right control
-                case DIK_LWIN: key = VK_LWIN; break;         // left win
-                case DIK_RWIN: key = VK_RWIN; break;         // right win
-                case DIK_APPS: key = VK_APPS; break;
-                default: break;
+			case DIK_LEFTARROW:
+				key = VK_LEFT;
+				break;
+			case DIK_RIGHTARROW:
+				key = VK_RIGHT;
+				break;
+			case DIK_UPARROW:
+				key = VK_UP;
+				break;
+			case DIK_DOWNARROW:
+				key = VK_DOWN;
+				break;
+			case DIK_DELETE:
+				key = VK_DELETE;
+				break;
+			case DIK_END:
+				key = VK_END;
+				break;
+			case DIK_HOME:
+				key = VK_HOME;
+				break;  // pos1
+			case DIK_PRIOR:
+				key = VK_PRIOR;
+				break;  // page up
+			case DIK_NEXT:
+				key = VK_NEXT;
+				break;  // page down
+			case DIK_INSERT:
+				key = VK_INSERT;
+				break;
+			case DIK_NUMPAD0:
+				key = VK_NUMPAD0;
+				break;
+			case DIK_NUMPAD1:
+				key = VK_NUMPAD1;
+				break;
+			case DIK_NUMPAD2:
+				key = VK_NUMPAD2;
+				break;
+			case DIK_NUMPAD3:
+				key = VK_NUMPAD3;
+				break;
+			case DIK_NUMPAD4:
+				key = VK_NUMPAD4;
+				break;
+			case DIK_NUMPAD5:
+				key = VK_NUMPAD5;
+				break;
+			case DIK_NUMPAD6:
+				key = VK_NUMPAD6;
+				break;
+			case DIK_NUMPAD7:
+				key = VK_NUMPAD7;
+				break;
+			case DIK_NUMPAD8:
+				key = VK_NUMPAD8;
+				break;
+			case DIK_NUMPAD9:
+				key = VK_NUMPAD9;
+				break;
+			case DIK_DECIMAL:
+				key = VK_DECIMAL;
+				break;
+			case DIK_NUMPADENTER:
+				key = IM_VK_KEYPAD_ENTER;
+				break;
+			case DIK_RMENU:
+				key = VK_RMENU;
+				break;  // right alt
+			case DIK_RCONTROL:
+				key = VK_RCONTROL;
+				break;  // right control
+			case DIK_LWIN:
+				key = VK_LWIN;
+				break;  // left win
+			case DIK_RWIN:
+				key = VK_RWIN;
+				break;  // right win
+			case DIK_APPS:
+				key = VK_APPS;
+				break;
+			default:
+				break;
 			}
 
 			switch (button->device.get()) {
@@ -476,7 +585,7 @@ RE::BSEventNotifyControl InputListener::ProcessEvent(RE::InputEvent* const* a_ev
 
 void ProcessEvent(ImGuiKey key, ImGuiKey key2)
 {
-	auto& io = ImGui::GetIO();
+	auto&       io = ImGui::GetIO();
 	static bool leftButton = false;
 	if (GetAsyncKeyState(VK_LBUTTON) < 0 && leftButton == false) {
 		leftButton = true;
