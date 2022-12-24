@@ -191,7 +191,7 @@ void D3D11VariableRateShading::UpdateTargetInformation(int displayWidth, int dis
 
 bool D3D11VariableRateShading::IsEnabled()
 {
-	return mEnableFixedFoveatedRendering && !DRS::GetSingleton()->IsInFullscreenMenu();
+	return mEnableFixedFoveatedRendering && SkyrimUpscaler::GetSingleton()->IsEnabled() && !DRS::GetSingleton()->IsInFullscreenMenu();
 }
 
 void D3D11VariableRateShading::PostOMSetRenderTargets(UINT numViews, ID3D11RenderTargetView* const* renderTargetViews, ID3D11DepthStencilView* depthStencilView)

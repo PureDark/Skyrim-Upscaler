@@ -315,6 +315,7 @@ struct UpscalerHooks
 				SkyrimUpscaler::GetSingleton()->m_runtime->render_effects(SkyrimUpscaler::GetSingleton()->m_runtime->get_command_queue()->get_immediate_command_list(), SkyrimUpscaler::GetSingleton()->m_rtv, SkyrimUpscaler::GetSingleton()->m_rtv);
 			}
 			func(param_1, param_2);
+			static ImageWrapper             SourceTex{ nullptr };
 			static ImageWrapper             TargetTex{ nullptr };
 			static ImageWrapper             DepthTex{ nullptr };
 			if (TargetTex.mImage == nullptr) {
@@ -333,9 +334,16 @@ struct UpscalerHooks
 					DepthTex.mImage = (ID3D11Texture2D*)resource;
 					DepthTex.mDSV = DSV;
 				}
+				ID3D11ShaderResourceView* SRV;
+				SkyrimUpscaler::GetSingleton()->mContext->PSGetShaderResources(0, 1, &SRV);
+				ID3D11Resource* resource;
+				SRV->GetResource(&resource);
+				SourceTex.mImage = (ID3D11Texture2D*)resource;
 			}
 			SkyrimUpscaler::GetSingleton()->Evaluate(TargetTex.mImage, DepthTex.mDSV);
 			SkyrimUpscaler::GetSingleton()->DelayEnable();
+			float color[4] = { 0, 0, 0, 1 };
+			SkyrimUpscaler::GetSingleton()->mContext->ClearRenderTargetView(SourceTex.GetRTV(), color);
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
@@ -366,25 +374,6 @@ struct UpscalerHooks
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	struct TakeScreenshot
-	{
-		static INT32 thunk(INT64 a1, INT64 a2, char* dest, UINT32 type)
-		{
-			return func(a1, a2, dest, type);
-		}
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-	struct WriteScreenshot
-	{
-		static INT64 thunk(INT64 a1, UINT32 a2, INT64 a3, const wchar_t* dest)
-		{
-			return func(a1, a2, a3, dest);
-		}
-		static inline REL::Relocation<decltype(thunk)> func;
-	};
-
-
 	static void Install()
 	{
 		if (REL::Module::IsVR()) {
@@ -410,10 +399,6 @@ struct UpscalerHooks
 			REL::safe_write<uint8_t>(buildCameraStateDataHook.address() + 0x34, patch3);
 			// Pre-UI Hook for upscaling specifically for VR
 			stl::write_thunk_call<BSImagespaceShader_Hook_VR>(REL::Offset(0x132c827).address());
-
-			// Fixing screenshot with DRS
-			//stl::write_thunk_call<TakeScreenshot>(REL::RelocationID(35882, 36853).address() + REL::Relocate(0x73, 0x69));
-			//stl::write_thunk_call<WriteScreenshot>(REL::RelocationID(75598, 77406).address() + REL::Relocate(0x13B, 0x143));
 		}
 		logger::info("Installed upscaler hooks");
 	}

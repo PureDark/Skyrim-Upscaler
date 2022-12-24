@@ -239,8 +239,6 @@ void SkyrimUpscaler::Evaluate(ID3D11Resource* destTex, ID3D11DepthStencilView* d
 					ID3D11ShaderResourceView* srvs[1] = { mVRS->combinedVRSShowTex.GetSRV()};
 					RenderTexture(3, 1, srvs, dsv, dest.GetRTV(), mDisplaySizeX, mDisplaySizeY);
 				}
-				//float color[4] = { 0, 0, 0, 1 };
-				//mContext->ClearRenderTargetView(mTargetTex.GetRTV(), color);
 			}
 		}
 	}
