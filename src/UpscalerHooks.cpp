@@ -301,11 +301,9 @@ struct UpscalerHooks
 					ID3D11RenderTargetView* RTV;
 					ID3D11DepthStencilView* DSV;
 					SkyrimUpscaler::GetSingleton()->mContext->OMGetRenderTargets(1, &RTV, &DSV);
-					ID3D11Resource* renderTarget;
-					RTV->GetResource(&renderTarget);
-					ID3D11Texture2D* targetTex;
-					renderTarget->QueryInterface(IID_PPV_ARGS(&targetTex));
-					SkyrimUpscaler::GetSingleton()->SetupTarget(targetTex);
+					ID3D11Resource* targetTex;
+					RTV->GetResource(&targetTex);
+					SkyrimUpscaler::GetSingleton()->SetupTarget((ID3D11Texture2D*)targetTex);
 					SkyrimUpscaler::GetSingleton()->mTargetTex.mRTV = RTV;
 				}
 			}
@@ -344,6 +342,23 @@ struct UpscalerHooks
 			SkyrimUpscaler::GetSingleton()->DelayEnable();
 			float color[4] = { 0, 0, 0, 1 };
 			SkyrimUpscaler::GetSingleton()->mContext->ClearRenderTargetView(SourceTex.GetRTV(), color);
+		}
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct Hook_PreTAA
+	{
+		static void thunk(INT64* a1, unsigned int a2, unsigned int a3)
+		{
+			static ID3D11Resource* beforeTAATex = nullptr;
+			if (beforeTAATex == nullptr) {
+				ID3D11RenderTargetView* RTV;
+				ID3D11DepthStencilView* DSV;
+				SkyrimUpscaler::GetSingleton()->mContext->OMGetRenderTargets(1, &RTV, &DSV);
+				RTV->GetResource(&beforeTAATex);
+			}
+			SkyrimUpscaler::GetSingleton()->mContext->CopyResource(SkyrimUpscaler::GetSingleton()->mTempColor.mImage, beforeTAATex);
+			func(a1, a2, a3);
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
@@ -399,6 +414,8 @@ struct UpscalerHooks
 			REL::safe_write<uint8_t>(buildCameraStateDataHook.address() + 0x34, patch3);
 			// Pre-UI Hook for upscaling specifically for VR
 			stl::write_thunk_call<BSImagespaceShader_Hook_VR>(REL::Offset(0x132c827).address());
+			// Pre-TAA Hook for VR
+			stl::write_thunk_call<Hook_PreTAA>(REL::Offset(0x12D1F0C).address());
 		}
 		logger::info("Installed upscaler hooks");
 	}

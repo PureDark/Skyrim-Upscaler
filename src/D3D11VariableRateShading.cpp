@@ -158,6 +158,7 @@ D3D11VariableRateShading::D3D11VariableRateShading(ID3D11Device* device)
 	if (!nvapiLoaded) {
 		NvAPI_Status result = NvAPI_Initialize();
 		if (result != NVAPI_OK) {
+			mEnableFixedFoveatedRendering = false;
 			return;
 		}
 		nvapiLoaded = true;
@@ -168,6 +169,7 @@ D3D11VariableRateShading::D3D11VariableRateShading(ID3D11Device* device)
 	NvAPI_Status status = NvAPI_D3D1x_GetGraphicsCapabilities(device, NV_D3D1x_GRAPHICS_CAPS_VER, &caps);
 	if (status != NVAPI_OK || !caps.bVariablePixelRateShadingSupported) {
 		logger::info("Variable rate shading is not available.");
+		Shutdown();
 		return;
 	}
 
@@ -196,6 +198,11 @@ bool D3D11VariableRateShading::IsEnabled()
 
 void D3D11VariableRateShading::PostOMSetRenderTargets(UINT numViews, ID3D11RenderTargetView* const* renderTargetViews, ID3D11DepthStencilView* depthStencilView)
 {
+	if (!nvapiLoaded) {
+		mEnableFixedFoveatedRendering = false;
+		return;
+	}
+
 	if (!IsEnabled() || numViews == 0 || renderTargetViews == nullptr || renderTargetViews[0] == nullptr || mDisplaySizeX == 0) {
 		DisableVRS();
 		return;
@@ -256,9 +263,9 @@ void D3D11VariableRateShading::Shutdown()
 	nvapiLoaded = false;
 	mEnableFixedFoveatedRendering = false;
 	combinedVRSTex.Release();
-	combinedVRSView->Release();
-	device->Release();
-	context->Release();
+	SAFE_RELEASE(combinedVRSView);
+	SAFE_RELEASE(device);
+	SAFE_RELEASE(context);
 }
 
 void D3D11VariableRateShading::EnableVRS()

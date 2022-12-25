@@ -136,7 +136,10 @@ void SettingGUI::OnRender()
 			SkyrimUpscaler::GetSingleton()->SetEnabled(SkyrimUpscaler::GetSingleton()->mEnableUpscaler);
 		}
 		ImGui::Checkbox("Disable Evaluation", &SkyrimUpscaler::GetSingleton()->mDisableEvaluation);
-		ImGui::Checkbox("Cancel Jitter", &SkyrimUpscaler::GetSingleton()->mCancelJitter);
+		//ImGui::Checkbox("Cancel Jitter", &SkyrimUpscaler::GetSingleton()->mCancelJitter);
+		if (ImGui::Checkbox("Use TAA For Periphery", &SkyrimUpscaler::GetSingleton()->mUseTAAForPeriphery)) {
+			UnkOuterStruct::GetSingleton()->SetTAA(SkyrimUpscaler::GetSingleton()->mUseTAAForPeriphery);
+		}
 		//ImGui::Checkbox("Debug", &SkyrimUpscaler::GetSingleton()->mDebug);
 		//ImGui::Checkbox("Debug2", &SkyrimUpscaler::GetSingleton()->mDebug2);
 		//ImGui::Checkbox("Debug3", &SkyrimUpscaler::GetSingleton()->mDebug3);
@@ -210,7 +213,7 @@ void SettingGUI::OnRender()
 		imgui_combo_names.push_back("FSR2");
 		imgui_combo_names.push_back("XeSS");
 		imgui_combo_names.push_back("DLAA");
-		//Somehow TAA hook not working in VR
+		//Not making it complicated
 		//imgui_combo_names.push_back("TAA");
 
 		if (ImGui::Combo("Upscale Type", (int*)&SkyrimUpscaler::GetSingleton()->mUpscaleType, imgui_combo_names.data(), imgui_combo_names.size())) {

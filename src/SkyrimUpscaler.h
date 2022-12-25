@@ -6,29 +6,20 @@
 #include <SimpleIni.h>
 #include <d3d11_4.h>
 #include <SettingGUI.h>
+#include <Common.h>
 #include <D3D11VariableRateShading.h>
-#include <ReShade/reshade.hpp>
-using namespace reshade::api;
-
-#ifndef max
-#	define max(a, b) (((a) > (b)) ? (a) : (b))
-#endif
-
-#ifndef SAFE_RELEASE
-	#define SAFE_RELEASE(a) if (a) { a->Release(); a = NULL; }
-#endif
 
 struct UnkOuterStruct
 {
 	struct UnkInnerStruct
 	{
-		uint8_t unk00[0x18];  // 00
-		bool    bTAA;         // 18
+		uint8_t unk00[24];  // 00
+		bool    bTAA;         // 0x18
 	};
 
 	// members
-	uint8_t         unk00[0x1F0];    // 00
-	UnkInnerStruct* unkInnerStruct;  // 1F0
+	uint8_t         unk00[536];    // 00
+	UnkInnerStruct* unkInnerStruct;  // 0x218
 
 	static UnkOuterStruct* GetSingleton()
 	{
@@ -49,34 +40,6 @@ struct UnkOuterStruct
 			return;
 		unkInnerStruct->bTAA = a_enabled;
 	}
-};
-
-enum UpscaleType
-{
-	DLSS,
-	FSR2,
-	XESS,
-	DLAA,
-	TAA
-};
-
-struct CustomConstants
-{
-	float jitterOffset[2];
-	float dynamicResScale[2];
-	float screenSize[2];
-	float motionSensitivity;
-	float blendScale;
-	float leftRect[4];
-	float rightRect[4];
-};
-
-struct FoveatedRect
-{
-	float left;
-	float top;
-	float right;
-	float bottom;
 };
 
 class SkyrimUpscaler
@@ -102,7 +65,8 @@ public:
 	bool mDisableEvaluation{ false };
 	bool mUseOptimalMipLodBias{ true };
 	bool mEnableTransparencyMask{ false };
-	bool mCancelJitter{ true };
+	bool mCancelJitter{ false };
+	bool mUseTAAForPeriphery{ true };
 	bool mBlurEdges{ false };
 	bool mDebug{ false };
 	bool mDebug2{ false };
@@ -114,8 +78,6 @@ public:
 	bool mDelayEnable = false;
 	int  mEnableDelayCount{ 0 };
 
-	float mCancelScaleX{ 0.5f };
-	float mCancelScaleY{ 0.5f };
 	float mBlurIntensity{ 1.5f };
 	float mBlendScale{ 5.0f };
 	float mMotionSensitivity{ 8.0f };

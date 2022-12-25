@@ -35,6 +35,10 @@ void SkyrimUpscaler::LoadINI()
 	SettingGUI::GetSingleton()->mToggleHotkey = mToggleHotKey;
 	GetSettingInt("Hotkeys", mToggleUpscaler, ImGuiKey_KeypadMultiply);
 
+	GetSettingBool("Settings", mEnableJitter, true);
+	GetSettingBool("Settings", mCancelJitter, true);
+	GetSettingBool("Settings", mUseTAAForPeriphery, true);
+
 	GetSettingFloat("FixedFoveatedUpscaling", mFoveatedScaleX, 0.67f);
 	GetSettingFloat("FixedFoveatedUpscaling", mFoveatedScaleY, 0.57f);
 	GetSettingFloat("FixedFoveatedUpscaling", mFoveatedOffsetX, 0.04f);
@@ -56,6 +60,8 @@ void SkyrimUpscaler::LoadINI()
 	mVRS->mCutoutRadius = std::clamp(mCutoutRadius, 0.0f, 2.0f);
 	mVRS->mWiden = std::clamp(mWiden, 0.1f, 4.0f);
 	mEnableDelayCount = -1;
+
+	UnkOuterStruct::GetSingleton()->SetTAA(SkyrimUpscaler::GetSingleton()->mUseTAAForPeriphery);
 
 	auto bFXAAEnabled = RE::GetINISetting("bFXAAEnabled:Display");
 	if (!REL::Module::IsVR()) {
@@ -81,6 +87,9 @@ void SkyrimUpscaler::SaveINI()
 	int mToggleHotkey = SettingGUI::GetSingleton()->mToggleHotkey;
 	SetSettingInt("Hotkeys", mToggleHotkey);
 	SetSettingInt("Hotkeys", mToggleUpscaler);
+	SetSettingBool("Settings", mEnableJitter);
+	SetSettingBool("Settings", mCancelJitter);
+	SetSettingBool("Settings", mUseTAAForPeriphery);
 	SetSettingFloat("FixedFoveatedUpscaling", mFoveatedScaleX);
 	SetSettingFloat("FixedFoveatedUpscaling", mFoveatedScaleY);
 	SetSettingFloat("FixedFoveatedUpscaling", mFoveatedOffsetX);
@@ -171,9 +180,10 @@ void SkyrimUpscaler::Evaluate(ID3D11Resource* destTex, ID3D11DepthStencilView* d
 			if ((IsEnabled() && !DRS::GetSingleton()->reset) && (mUpscaleType != TAA)) {
 				if (!mDisableEvaluation) {
 					float vFOV = GetVerticalFOVRad();
-					UpscaleParams params = GetUpscaleParams(0, mTargetTex.mImage, mMotionVectors.mImage, mDepthBuffer.mImage, nullptr, nullptr, mFoveatedRenderSizeX, mFoveatedRenderSizeY, mSharpness,
+					auto          targetTex = mUseTAAForPeriphery ? mTempColor.mImage : mTargetTex.mImage;
+					UpscaleParams params = GetUpscaleParams(0, targetTex, mMotionVectors.mImage, mDepthBuffer.mImage, nullptr, nullptr, mFoveatedRenderSizeX, mFoveatedRenderSizeY, mSharpness,
 						mJitterOffsets[0], mJitterOffsets[1], mMotionScale[0], mMotionScale[1], false, 0.1f, 1000.0f, vFOV, mUpscaleType == DLSS);
-					UpscaleParams params2 = GetUpscaleParams(1, mTargetTex.mImage, mMotionVectors.mImage, mDepthBuffer.mImage, nullptr, nullptr, mFoveatedRenderSizeX, mFoveatedRenderSizeY, mSharpness,
+					UpscaleParams params2 = GetUpscaleParams(1, targetTex, mMotionVectors.mImage, mDepthBuffer.mImage, nullptr, nullptr, mFoveatedRenderSizeX, mFoveatedRenderSizeY, mSharpness,
 						mJitterOffsets[0], mJitterOffsets[1], mMotionScale[0], mMotionScale[1], false, 0.1f, 1000.0f, vFOV, true);
 					params.colorBase = { mSrcBox[0].left, mSrcBox[0].top };
 					params.depthBase = { mSrcBox[0].left, mSrcBox[0].top };
@@ -220,15 +230,10 @@ void SkyrimUpscaler::Evaluate(ID3D11Resource* destTex, ID3D11DepthStencilView* d
 					mContext->CopyResource(mAccumulateTex.mImage, dest.mImage);
 				}
 				if (!mDisableEvaluation) {
-					if (mDebug) {
-						mContext->CopySubresourceRegion(destTex, 0, mDstBox[0].left, mDstBox[0].top, 0, mOutColorRect[0].mImage, 0, NULL);
-						mContext->CopySubresourceRegion(destTex, 0, mDstBox[1].left, mDstBox[1].top, 0, mOutColorRect[1].mImage, 0, NULL);
-					} else {
-						mContext->CopySubresourceRegion(mTempColor.mImage, 0, mDstBox[0].left, mDstBox[0].top, 0, mOutColorRect[0].mImage, 0, NULL);
-						mContext->CopySubresourceRegion(mTempColor.mImage, 0, mDstBox[1].left, mDstBox[1].top, 0, mOutColorRect[1].mImage, 0, NULL);
-						ID3D11ShaderResourceView* srvs[1] = { mTempColor.GetSRV() };
-						RenderTexture(2, 1, srvs, dsv, dest.GetRTV(), mDisplaySizeX, mDisplaySizeY);
-					}
+					mContext->CopySubresourceRegion(mTempColor.mImage, 0, mDstBox[0].left, mDstBox[0].top, 0, mOutColorRect[0].mImage, 0, NULL);
+					mContext->CopySubresourceRegion(mTempColor.mImage, 0, mDstBox[1].left, mDstBox[1].top, 0, mOutColorRect[1].mImage, 0, NULL);
+					ID3D11ShaderResourceView* srvs[1] = { mTempColor.GetSRV() };
+					RenderTexture(2, 1, srvs, dsv, dest.GetRTV(), mDisplaySizeX, mDisplaySizeY);
 				}
 				if (mBlurEdges) {
 					mContext->CopyResource(mTempColor.mImage, dest.mImage);
@@ -342,15 +347,15 @@ void SkyrimUpscaler::SetEnabled(bool enabled)
 		DRS::GetSingleton()->targetScaleFactor = mRenderScale;
 		DRS::GetSingleton()->ControlResolution();
 		if (mUseOptimalMipLodBias)
-			mMipLodBias = (mUpscaleType==DLAA)?0:GetOptimalMipmapBias(0);
-		UnkOuterStruct::GetSingleton()->SetTAA(false);
+			mMipLodBias = (mUpscaleType == DLAA) ? 0 : GetOptimalMipmapBias(0);
+		UnkOuterStruct::GetSingleton()->SetTAA(SkyrimUpscaler::GetSingleton()->mUseTAAForPeriphery);
 		mVRS->UpdateTargetInformation(mDisplaySizeX, mDisplaySizeY, mRenderSizeX, mRenderSizeY, leftCenterX, leftCenterY, rightCenterX, rightCenterY);
 	} else {
 		DRS::GetSingleton()->targetScaleFactor = 1.0f;
 		DRS::GetSingleton()->ControlResolution();
 		if (mUseOptimalMipLodBias)
 			mMipLodBias = 0;
-		UnkOuterStruct::GetSingleton()->SetTAA(mEnableUpscaler && mUpscaleType == TAA);
+		UnkOuterStruct::GetSingleton()->SetTAA(SkyrimUpscaler::GetSingleton()->mUseTAAForPeriphery);
 		mVRS->UpdateTargetInformation(mDisplaySizeX, mDisplaySizeY, mDisplaySizeX, mDisplaySizeY, leftCenterX, leftCenterY, rightCenterX, rightCenterY);
 	}
 }
@@ -461,13 +466,13 @@ void SkyrimUpscaler::InitUpscaler()
 			if (mUseOptimalMipLodBias)
 				mMipLodBias = 0;
 		}
-		UnkOuterStruct::GetSingleton()->SetTAA(false);
+		UnkOuterStruct::GetSingleton()->SetTAA(SkyrimUpscaler::GetSingleton()->mUseTAAForPeriphery);
 	} else {
 		DRS::GetSingleton()->targetScaleFactor = 1.0f;
 		DRS::GetSingleton()->ControlResolution();
 		if (mUseOptimalMipLodBias)
 			mMipLodBias = 0;
-		UnkOuterStruct::GetSingleton()->SetTAA(mEnableUpscaler);
+		UnkOuterStruct::GetSingleton()->SetTAA(SkyrimUpscaler::GetSingleton()->mUseTAAForPeriphery);
 	}
 	SetupD3DBox(mFoveatedOffsetX, mFoveatedOffsetY);
 }
