@@ -68,6 +68,8 @@ public:
 	bool mCancelJitter{ false };
 	bool mUseTAAForPeriphery{ true };
 	bool mBlurEdges{ false };
+
+	bool mNeedUpdate{ true };
 	bool mDebug{ false };
 	bool mDebug2{ false };
 	bool mDebug3{ false };

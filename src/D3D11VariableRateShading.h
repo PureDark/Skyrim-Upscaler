@@ -13,7 +13,7 @@ public:
 	bool  mEnableFixedFoveatedRendering = false;
 	float mInnerRadius = 0.7f;
 	float mMiddleRadius = 0.8f;
-	float mOutterRadius = 0.9f;
+	float mOuterRadius = 0.9f;
 	float mCutoutRadius = 1.2f;
 	float mWiden = 1.5f;
 	bool  mNeedUpdate = false;

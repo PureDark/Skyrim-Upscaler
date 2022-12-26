@@ -293,24 +293,16 @@ struct UpscalerHooks
 	{
 		static void thunk(RE::BSImagespaceShader* param_1, uint64_t param_2)
 		{
-			static bool initTAA = false;
-			if (!initTAA) {
-				initTAA = true;
-				UnkOuterStruct::GetSingleton()->SetTAA(SkyrimUpscaler::GetSingleton()->mUpscaleType == TAA);
-				if (SkyrimUpscaler::GetSingleton()->mTargetTex.mImage == nullptr) {
-					ID3D11RenderTargetView* RTV;
-					ID3D11DepthStencilView* DSV;
-					SkyrimUpscaler::GetSingleton()->mContext->OMGetRenderTargets(1, &RTV, &DSV);
-					ID3D11Resource* targetTex;
-					RTV->GetResource(&targetTex);
-					SkyrimUpscaler::GetSingleton()->SetupTarget((ID3D11Texture2D*)targetTex);
-					SkyrimUpscaler::GetSingleton()->mTargetTex.mRTV = RTV;
-				}
-			}
-			if (SkyrimUpscaler::GetSingleton()->m_runtime != nullptr) {
-				if (SkyrimUpscaler::GetSingleton()->m_rtv.handle == 0)
-					SkyrimUpscaler::GetSingleton()->m_rtv = { reinterpret_cast<uintptr_t>(SkyrimUpscaler::GetSingleton()->mTargetTex.mRTV) };
-				SkyrimUpscaler::GetSingleton()->m_runtime->render_effects(SkyrimUpscaler::GetSingleton()->m_runtime->get_command_queue()->get_immediate_command_list(), SkyrimUpscaler::GetSingleton()->m_rtv, SkyrimUpscaler::GetSingleton()->m_rtv);
+			if (SkyrimUpscaler::GetSingleton()->mNeedUpdate) {
+				SkyrimUpscaler::GetSingleton()->mNeedUpdate = false;
+				UnkOuterStruct::GetSingleton()->SetTAA(SkyrimUpscaler::GetSingleton()->mUseTAAForPeriphery);
+				ID3D11RenderTargetView* RTV;
+				ID3D11DepthStencilView* DSV;
+				SkyrimUpscaler::GetSingleton()->mContext->OMGetRenderTargets(1, &RTV, &DSV);
+				ID3D11Resource* targetTex;
+				RTV->GetResource(&targetTex);
+				SkyrimUpscaler::GetSingleton()->SetupTarget((ID3D11Texture2D*)targetTex);
+				SkyrimUpscaler::GetSingleton()->mTargetTex.mRTV = RTV;
 			}
 			func(param_1, param_2);
 			static ImageWrapper             SourceTex{ nullptr };
@@ -338,6 +330,11 @@ struct UpscalerHooks
 				SRV->GetResource(&resource);
 				SourceTex.mImage = (ID3D11Texture2D*)resource;
 			}
+			if (SkyrimUpscaler::GetSingleton()->m_runtime != nullptr && !SkyrimUpscaler::GetSingleton()->mUseTAAForPeriphery) {
+				if (SkyrimUpscaler::GetSingleton()->m_rtv.handle == 0)
+					SkyrimUpscaler::GetSingleton()->m_rtv = { reinterpret_cast<uintptr_t>(SkyrimUpscaler::GetSingleton()->mTargetTex.mRTV) };
+				SkyrimUpscaler::GetSingleton()->m_runtime->render_effects(SkyrimUpscaler::GetSingleton()->m_runtime->get_command_queue()->get_immediate_command_list(), SkyrimUpscaler::GetSingleton()->m_rtv, SkyrimUpscaler::GetSingleton()->m_rtv);
+			}
 			SkyrimUpscaler::GetSingleton()->Evaluate(TargetTex.mImage, DepthTex.mDSV);
 			SkyrimUpscaler::GetSingleton()->DelayEnable();
 			float color[4] = { 0, 0, 0, 1 };
@@ -350,14 +347,22 @@ struct UpscalerHooks
 	{
 		static void thunk(INT64* a1, unsigned int a2, unsigned int a3)
 		{
-			static ID3D11Resource* beforeTAATex = nullptr;
-			if (beforeTAATex == nullptr) {
+			static ImageWrapper beforeTAAImage;
+			if (beforeTAAImage.mImage == nullptr) {
+				ID3D11Resource*  beforeTAATex = nullptr;
 				ID3D11RenderTargetView* RTV;
 				ID3D11DepthStencilView* DSV;
 				SkyrimUpscaler::GetSingleton()->mContext->OMGetRenderTargets(1, &RTV, &DSV);
 				RTV->GetResource(&beforeTAATex);
+				beforeTAAImage.mImage = (ID3D11Texture2D*)beforeTAATex;
+				beforeTAAImage.mRTV = RTV;
 			}
-			SkyrimUpscaler::GetSingleton()->mContext->CopyResource(SkyrimUpscaler::GetSingleton()->mTempColor.mImage, beforeTAATex);
+			if (SkyrimUpscaler::GetSingleton()->m_runtime != nullptr) {
+				if (SkyrimUpscaler::GetSingleton()->m_rtv.handle == 0)
+					SkyrimUpscaler::GetSingleton()->m_rtv = { reinterpret_cast<uintptr_t>(beforeTAAImage.mRTV) };
+				SkyrimUpscaler::GetSingleton()->m_runtime->render_effects(SkyrimUpscaler::GetSingleton()->m_runtime->get_command_queue()->get_immediate_command_list(), SkyrimUpscaler::GetSingleton()->m_rtv, SkyrimUpscaler::GetSingleton()->m_rtv);
+			}
+			SkyrimUpscaler::GetSingleton()->mContext->CopyResource(SkyrimUpscaler::GetSingleton()->mTempColor.mImage, beforeTAAImage.mImage);
 			func(a1, a2, a3);
 		}
 		static inline REL::Relocation<decltype(thunk)> func;

@@ -135,10 +135,11 @@ void SettingGUI::OnRender()
 		if (ImGui::Checkbox("Enable", &SkyrimUpscaler::GetSingleton()->mEnableUpscaler)) {
 			SkyrimUpscaler::GetSingleton()->SetEnabled(SkyrimUpscaler::GetSingleton()->mEnableUpscaler);
 		}
-		ImGui::Checkbox("Disable Evaluation", &SkyrimUpscaler::GetSingleton()->mDisableEvaluation);
+		//ImGui::Checkbox("Disable Evaluation", &SkyrimUpscaler::GetSingleton()->mDisableEvaluation);
 		//ImGui::Checkbox("Cancel Jitter", &SkyrimUpscaler::GetSingleton()->mCancelJitter);
 		if (ImGui::Checkbox("Use TAA For Periphery", &SkyrimUpscaler::GetSingleton()->mUseTAAForPeriphery)) {
 			UnkOuterStruct::GetSingleton()->SetTAA(SkyrimUpscaler::GetSingleton()->mUseTAAForPeriphery);
+			SkyrimUpscaler::GetSingleton()->mNeedUpdate = true;
 		}
 		//ImGui::Checkbox("Debug", &SkyrimUpscaler::GetSingleton()->mDebug);
 		//ImGui::Checkbox("Debug2", &SkyrimUpscaler::GetSingleton()->mDebug2);
@@ -151,18 +152,18 @@ void SettingGUI::OnRender()
 		//ImGui::DragFloat("Blur Intensity", &SkyrimUpscaler::GetSingleton()->mBlurIntensity, 0.1f, 0.0f, 10.0f);
 		//ImGui::EndDisabled();
 
-		ImGui::DragFloat("Motion Sensitivity", &SkyrimUpscaler::GetSingleton()->mMotionSensitivity, 0.1f, 0.0f, 10.0f);
-		ImGui::DragFloat("Blend Scale", &SkyrimUpscaler::GetSingleton()->mBlendScale, 0.1f, 0.0f, 10.0f);
-		ImGui::Checkbox("Jitter", &SkyrimUpscaler::GetSingleton()->mEnableJitter);
-		if (ImGui::ArrowButton("mJitterPhase-", ImGuiDir_Left)) {
-			SkyrimUpscaler::GetSingleton()->mJitterPhase--;
-		}
-		ImGui::SameLine(0, 4.0f);
-		if (ImGui::ArrowButton("mJitterPhase+", ImGuiDir_Right)) {
-			SkyrimUpscaler::GetSingleton()->mJitterPhase++;
-		}
-		ImGui::SameLine(0, 4.0f);
-		ImGui::DragInt("Jitter Phase Count", &SkyrimUpscaler::GetSingleton()->mJitterPhase, 1, 0, 128);
+		//ImGui::DragFloat("Motion Sensitivity", &SkyrimUpscaler::GetSingleton()->mMotionSensitivity, 0.1f, 0.0f, 10.0f);
+		//ImGui::DragFloat("Blend Scale", &SkyrimUpscaler::GetSingleton()->mBlendScale, 0.1f, 0.0f, 10.0f);
+		//ImGui::Checkbox("Jitter", &SkyrimUpscaler::GetSingleton()->mEnableJitter);
+		//if (ImGui::ArrowButton("mJitterPhase-", ImGuiDir_Left)) {
+		//	SkyrimUpscaler::GetSingleton()->mJitterPhase--;
+		//}
+		//ImGui::SameLine(0, 4.0f);
+		//if (ImGui::ArrowButton("mJitterPhase+", ImGuiDir_Right)) {
+		//	SkyrimUpscaler::GetSingleton()->mJitterPhase++;
+		//}
+		//ImGui::SameLine(0, 4.0f);
+		//ImGui::DragInt("Jitter Phase Count", &SkyrimUpscaler::GetSingleton()->mJitterPhase, 1, 0, 128);
 		//ImGui::Checkbox("Enable Transparency Mask", &SkyrimUpscaler::GetSingleton()->mEnableTransparencyMask);
 		if (ImGui::Checkbox("Sharpness", &SkyrimUpscaler::GetSingleton()->mSharpening)) {
 			SkyrimUpscaler::GetSingleton()->InitUpscaler();
@@ -208,18 +209,55 @@ void SettingGUI::OnRender()
 		}
 		ImGui::EndDisabled();
 
+		bool DLSSAvailable = IsUpscaleMethodAvailable(DLSS);
+		bool FSR2Available = IsUpscaleMethodAvailable(FSR2);
+		bool XeSSAvailable = IsUpscaleMethodAvailable(XESS);
+
+
 		std::vector<const char*> imgui_combo_names{};
-		imgui_combo_names.push_back("DLSS");
-		imgui_combo_names.push_back("FSR2");
-		imgui_combo_names.push_back("XeSS");
-		imgui_combo_names.push_back("DLAA");
+		if (DLSSAvailable)
+			imgui_combo_names.push_back("DLSS");
+		if (FSR2Available)
+			imgui_combo_names.push_back("FSR2");
+		if (XeSSAvailable)
+			imgui_combo_names.push_back("XeSS");
+		if (DLSSAvailable)
+			imgui_combo_names.push_back("DLAA");
 		//Not making it complicated
 		//imgui_combo_names.push_back("TAA");
 
-		if (ImGui::Combo("Upscale Type", (int*)&SkyrimUpscaler::GetSingleton()->mUpscaleType, imgui_combo_names.data(), imgui_combo_names.size())) {
-			if (SkyrimUpscaler::GetSingleton()->mUpscaleType < 0 || SkyrimUpscaler::GetSingleton()->mUpscaleType >= imgui_combo_names.size()) {
-				SkyrimUpscaler::GetSingleton()->mUpscaleType = 0;
+		int upscaleType = 0;
+		auto upscalerName = "DLSS";
+		if (SkyrimUpscaler::GetSingleton()->mUpscaleType == DLSS)
+			upscalerName = "DLSS";
+		else if (SkyrimUpscaler::GetSingleton()->mUpscaleType == FSR2)
+			upscalerName = "FSR2";
+		else if (SkyrimUpscaler::GetSingleton()->mUpscaleType == XESS)
+			upscalerName = "XeSS";
+		else if (SkyrimUpscaler::GetSingleton()->mUpscaleType == DLAA)
+			upscalerName = "DLAA";
+		else if (SkyrimUpscaler::GetSingleton()->mUpscaleType == TAA)
+			upscalerName = "TAA";
+		for (int i = 0; i < imgui_combo_names.size(); i++) {
+			if (imgui_combo_names[i] == upscalerName) {
+				upscaleType == i;
+				break;
 			}
+		}
+		if (ImGui::Combo("Upscale Type", (int*)&upscaleType, imgui_combo_names.data(), imgui_combo_names.size())) {
+			if (upscaleType < 0 || upscaleType >= imgui_combo_names.size()) {
+				upscaleType = 0;
+			}
+			if (imgui_combo_names[upscaleType] == "DLSS")
+				SkyrimUpscaler::GetSingleton()->mUpscaleType = DLSS;
+			else if (imgui_combo_names[upscaleType] == "FSR2")
+				SkyrimUpscaler::GetSingleton()->mUpscaleType = FSR2;
+			else if (imgui_combo_names[upscaleType] == "XeSS")
+				SkyrimUpscaler::GetSingleton()->mUpscaleType = XESS;
+			else if (imgui_combo_names[upscaleType] == "DLAA")
+				SkyrimUpscaler::GetSingleton()->mUpscaleType = DLAA;
+			else if (imgui_combo_names[upscaleType] == "TAA")
+				SkyrimUpscaler::GetSingleton()->mUpscaleType = TAA;
 
 			SkyrimUpscaler::GetSingleton()->InitUpscaler();
 		}
@@ -230,35 +268,14 @@ void SettingGUI::OnRender()
 			SkyrimUpscaler::GetSingleton()->InitUpscaler();
 		}
 
-		const auto w = (float)GetRenderWidth(0);
-		const auto h = (float)GetRenderHeight(0);
+		//const auto w = (float)GetRenderWidth(0);
+		//const auto h = (float)GetRenderHeight(0);
 
-		if (ImGui::DragFloat("MotionScale X", &SkyrimUpscaler::GetSingleton()->mMotionScale[0], 0.01f, -w, w) ||
-			ImGui::DragFloat("MotionScale Y", &SkyrimUpscaler::GetSingleton()->mMotionScale[1], 0.01f, -h, h)) {
-			SkyrimUpscaler::GetSingleton()->SetMotionScale(SkyrimUpscaler::GetSingleton()->mMotionScale[0], SkyrimUpscaler::GetSingleton()->mMotionScale[1]);
-		}
+		//if (ImGui::DragFloat("MotionScale X", &SkyrimUpscaler::GetSingleton()->mMotionScale[0], 0.01f, -w, w) ||
+		//	ImGui::DragFloat("MotionScale Y", &SkyrimUpscaler::GetSingleton()->mMotionScale[1], 0.01f, -h, h)) {
+		//	SkyrimUpscaler::GetSingleton()->SetMotionScale(SkyrimUpscaler::GetSingleton()->mMotionScale[0], SkyrimUpscaler::GetSingleton()->mMotionScale[1]);
+		//}
 		ImGui::EndDisabled();
-
-		/*ImGui::Spacing();
-		if (ImGui::ArrowButton("mCancelScaleX-", ImGuiDir_Left)) {
-			SkyrimUpscaler::GetSingleton()->mCancelScaleX -= 0.01f;
-		}
-		ImGui::SameLine(0, 4.0f);
-		if (ImGui::ArrowButton("mCancelScaleX+", ImGuiDir_Right)) {
-			SkyrimUpscaler::GetSingleton()->mCancelScaleX += 0.01f;
-		}
-		ImGui::SameLine(0, 4.0f);
-		ImGui::DragFloat("Cancel Scale X", &SkyrimUpscaler::GetSingleton()->mCancelScaleX, 0.001f, 0.0f, 3.0f);
-		ImGui::Spacing();
-		if (ImGui::ArrowButton("mCancelScaleY-", ImGuiDir_Left)) {
-			SkyrimUpscaler::GetSingleton()->mCancelScaleY -= 0.01f;
-		}
-		ImGui::SameLine(0, 4.0f);
-		if (ImGui::ArrowButton("mCancelScaleY+", ImGuiDir_Right)) {
-			SkyrimUpscaler::GetSingleton()->mCancelScaleY += 0.01f;
-		}
-		ImGui::SameLine(0, 4.0f);
-		ImGui::DragFloat("Cancel Scale Y", &SkyrimUpscaler::GetSingleton()->mCancelScaleY, 0.001f, 0.0f, 3.0f);*/
 
 		ImGui::Spacing();
 		if (ImGui::ArrowButton("mFoveatedScaleX-", ImGuiDir_Left)) {
@@ -345,16 +362,16 @@ void SettingGUI::OnRender()
 		};
 		//Outter Radius
 		if (ImGui::ArrowButton("mVRS->mOutterRadius+", ImGuiDir_Left)) {
-			SkyrimUpscaler::GetSingleton()->mVRS->mOutterRadius -= 0.01f;
+			SkyrimUpscaler::GetSingleton()->mVRS->mOuterRadius -= 0.01f;
 			SkyrimUpscaler::GetSingleton()->mVRS->mNeedUpdate = true;
 		}
 		ImGui::SameLine(0, 4.0f);
 		if (ImGui::ArrowButton("mVRS->mOutterRadius-", ImGuiDir_Right)) {
-			SkyrimUpscaler::GetSingleton()->mVRS->mOutterRadius += 0.01f;
+			SkyrimUpscaler::GetSingleton()->mVRS->mOuterRadius += 0.01f;
 			SkyrimUpscaler::GetSingleton()->mVRS->mNeedUpdate = true;
 		}
 		ImGui::SameLine(0, 4.0f);
-		if (ImGui::DragFloat("Outter Radius", &SkyrimUpscaler::GetSingleton()->mVRS->mOutterRadius, 0.01f, 0.0f, 1.5f)) {
+		if (ImGui::DragFloat("Outter Radius", &SkyrimUpscaler::GetSingleton()->mVRS->mOuterRadius, 0.01f, 0.0f, 1.5f)) {
 			SkyrimUpscaler::GetSingleton()->mVRS->mNeedUpdate = true;
 		};
 		//Cutout Radius

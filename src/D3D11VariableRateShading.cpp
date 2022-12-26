@@ -10,7 +10,7 @@ uint8_t D3D11VariableRateShading::DistanceToVRSLevel(float distance)
 	if (distance < mMiddleRadius) {
 		return 1;
 	}
-	if (distance < mOutterRadius) {
+	if (distance < mOuterRadius) {
 		return 2;
 	}
 	if (distance < mCutoutRadius) {

@@ -45,21 +45,31 @@ void SkyrimUpscaler::LoadINI()
 	GetSettingFloat("FixedFoveatedUpscaling", mFoveatedOffsetY, 0.04f);
 
 	bool  mEnableFixedFoveatedRendering;
-	float mInnerRadius, mMiddleRadius, mOutterRadius, mCutoutRadius;
+	float mInnerRadius, mMiddleRadius, mOuterRadius, mCutoutRadius;
 	float mWiden;
 	GetSettingFloat("FixedFoveatedRendering", mEnableFixedFoveatedRendering, false);
 	GetSettingFloat("FixedFoveatedRendering", mInnerRadius, 0.7f);
 	GetSettingFloat("FixedFoveatedRendering", mMiddleRadius, 0.8f);
-	GetSettingFloat("FixedFoveatedRendering", mOutterRadius, 0.9f);
+	GetSettingFloat("FixedFoveatedRendering", mOuterRadius, 0.9f);
 	GetSettingFloat("FixedFoveatedRendering", mCutoutRadius, 1.2f);
 	GetSettingFloat("FixedFoveatedRendering", mWiden, 1.0f);
 	mVRS->mEnableFixedFoveatedRendering = mEnableFixedFoveatedRendering;
 	mVRS->mInnerRadius = std::clamp(mInnerRadius, 0.0f, 1.0f);
 	mVRS->mMiddleRadius = std::clamp(mMiddleRadius, 0.0f, 1.2f);
-	mVRS->mOutterRadius = std::clamp(mOutterRadius, 0.0f, 1.5f);
+	mVRS->mOuterRadius = std::clamp(mOuterRadius, 0.0f, 1.5f);
 	mVRS->mCutoutRadius = std::clamp(mCutoutRadius, 0.0f, 2.0f);
 	mVRS->mWiden = std::clamp(mWiden, 0.1f, 4.0f);
 	mEnableDelayCount = -1;
+
+	bool DLSSAvailable = IsUpscaleMethodAvailable(DLSS);
+	bool FSR2Available = IsUpscaleMethodAvailable(FSR2);
+	bool XeSSAvailable = IsUpscaleMethodAvailable(XESS);
+	if (mUpscaleType == DLSS && !DLSSAvailable)
+		mUpscaleType = FSR2Available ? FSR2 : XeSSAvailable ? XESS : TAA;
+	if (mUpscaleType == FSR2 && !FSR2Available)
+		mUpscaleType = DLSSAvailable ? DLSS : XeSSAvailable ? XESS : TAA;
+	if (mUpscaleType == XESS && !XeSSAvailable)
+		mUpscaleType = DLSSAvailable ? DLSS : FSR2Available ? FSR2 : TAA;
 
 	UnkOuterStruct::GetSingleton()->SetTAA(SkyrimUpscaler::GetSingleton()->mUseTAAForPeriphery);
 
@@ -98,12 +108,12 @@ void SkyrimUpscaler::SaveINI()
 	bool mEnableFixedFoveatedRendering = mVRS->mEnableFixedFoveatedRendering;
 	float mInnerRadius = mVRS->mInnerRadius; 
 	float mMiddleRadius = mVRS->mMiddleRadius; 
-	float mOutterRadius = mVRS->mOutterRadius;
+	float mOuterRadius = mVRS->mOuterRadius;
 	float mWiden = mVRS->mWiden; 
 	SetSettingFloat("FixedFoveatedRendering", mEnableFixedFoveatedRendering);
 	SetSettingFloat("FixedFoveatedRendering", mInnerRadius);
 	SetSettingFloat("FixedFoveatedRendering", mMiddleRadius);
-	SetSettingFloat("FixedFoveatedRendering", mOutterRadius);
+	SetSettingFloat("FixedFoveatedRendering", mOuterRadius);
 	SetSettingFloat("FixedFoveatedRendering", mWiden);
 	ini.SaveFile(L"Data\\SKSE\\Plugins\\SkyrimUpscaler.ini");
 }
@@ -181,10 +191,11 @@ void SkyrimUpscaler::Evaluate(ID3D11Resource* destTex, ID3D11DepthStencilView* d
 				if (!mDisableEvaluation) {
 					float vFOV = GetVerticalFOVRad();
 					auto          targetTex = mUseTAAForPeriphery ? mTempColor.mImage : mTargetTex.mImage;
-					UpscaleParams params = GetUpscaleParams(0, targetTex, mMotionVectors.mImage, mDepthBuffer.mImage, nullptr, nullptr, mFoveatedRenderSizeX, mFoveatedRenderSizeY, mSharpness,
-						mJitterOffsets[0], mJitterOffsets[1], mMotionScale[0], mMotionScale[1], false, 0.1f, 1000.0f, vFOV, mUpscaleType == DLSS);
+					auto          transparentMask = mEnableTransparencyMask ? mTransparentMask.mImage : nullptr;
+					UpscaleParams params = GetUpscaleParams(0, targetTex, mMotionVectors.mImage, mDepthBuffer.mImage, transparentMask, nullptr, mFoveatedRenderSizeX, mFoveatedRenderSizeY, mSharpness,
+						mJitterOffsets[0], mJitterOffsets[1], mMotionScale[0], mMotionScale[1], false, 0.15f, 3000.0f, vFOV, mUpscaleType == DLSS);
 					UpscaleParams params2 = GetUpscaleParams(1, targetTex, mMotionVectors.mImage, mDepthBuffer.mImage, nullptr, nullptr, mFoveatedRenderSizeX, mFoveatedRenderSizeY, mSharpness,
-						mJitterOffsets[0], mJitterOffsets[1], mMotionScale[0], mMotionScale[1], false, 0.1f, 1000.0f, vFOV, true);
+						mJitterOffsets[0], mJitterOffsets[1], mMotionScale[0], mMotionScale[1], false, 0.15f, 3000.0f, vFOV, true);
 					params.colorBase = { mSrcBox[0].left, mSrcBox[0].top };
 					params.depthBase = { mSrcBox[0].left, mSrcBox[0].top };
 					params.motionBase = { mSrcBox[0].left, mSrcBox[0].top };
