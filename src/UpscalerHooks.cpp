@@ -131,6 +131,21 @@ HRESULT WINAPI hk_ID3D11Device_CreateTexture2D(ID3D11Device* This, const D3D11_T
 			SkyrimUpscaler::GetSingleton()->SetupOpaqueColor(*ppTexture2D);
 			locking = false;
 		}
+	} else if (pDesc->Format == DXGI_FORMAT_R16G16B16A16_FLOAT) {
+		if (pDesc->Width == SkyrimUpscaler::GetSingleton()->mDisplaySizeX &&
+			pDesc->Height == SkyrimUpscaler::GetSingleton()->mDisplaySizeY) {
+			logger::info("Opaque Buffer HDR Found : {} x {}", pDesc->Width, pDesc->Height);
+			static int Skip = 1;
+			if (Skip > 0) {
+				Skip--;
+				return hr;
+			}
+			if (SkyrimUpscaler::GetSingleton()->mOpaqueColorHDR.mImage != nullptr)
+				return hr;
+			locking = true;
+			SkyrimUpscaler::GetSingleton()->SetupOpaqueColorHDR(*ppTexture2D);
+			locking = false;
+		}
 	}
 	return hr;
 }
@@ -293,15 +308,16 @@ struct UpscalerHooks
 	{
 		static void thunk(RE::BSImagespaceShader* param_1, uint64_t param_2)
 		{
-			if (SkyrimUpscaler::GetSingleton()->mNeedUpdate) {
+			if (SkyrimUpscaler::GetSingleton()->mNeedUpdate || 
+				SkyrimUpscaler::GetSingleton()->mTargetTex.mImage == nullptr) {
 				SkyrimUpscaler::GetSingleton()->mNeedUpdate = false;
 				UnkOuterStruct::GetSingleton()->SetTAA(SkyrimUpscaler::GetSingleton()->mUseTAAForPeriphery);
 				ID3D11RenderTargetView* RTV;
 				ID3D11DepthStencilView* DSV;
 				SkyrimUpscaler::GetSingleton()->mContext->OMGetRenderTargets(1, &RTV, &DSV);
-				ID3D11Resource* targetTex;
-				RTV->GetResource(&targetTex);
-				SkyrimUpscaler::GetSingleton()->SetupTarget((ID3D11Texture2D*)targetTex);
+				ID3D11Resource* resource;
+				RTV->GetResource(&resource);
+				SkyrimUpscaler::GetSingleton()->SetupTarget((ID3D11Texture2D*)resource);
 				SkyrimUpscaler::GetSingleton()->mTargetTex.mRTV = RTV;
 			}
 			func(param_1, param_2);
@@ -330,10 +346,13 @@ struct UpscalerHooks
 				SRV->GetResource(&resource);
 				SourceTex.mImage = (ID3D11Texture2D*)resource;
 			}
-			if (SkyrimUpscaler::GetSingleton()->m_runtime != nullptr && !SkyrimUpscaler::GetSingleton()->mUseTAAForPeriphery) {
-				if (SkyrimUpscaler::GetSingleton()->m_rtv.handle == 0)
-					SkyrimUpscaler::GetSingleton()->m_rtv = { reinterpret_cast<uintptr_t>(SkyrimUpscaler::GetSingleton()->mTargetTex.mRTV) };
-				SkyrimUpscaler::GetSingleton()->m_runtime->render_effects(SkyrimUpscaler::GetSingleton()->m_runtime->get_command_queue()->get_immediate_command_list(), SkyrimUpscaler::GetSingleton()->m_rtv, SkyrimUpscaler::GetSingleton()->m_rtv);
+			//if (SkyrimUpscaler::GetSingleton()->m_runtime != nullptr && !SkyrimUpscaler::GetSingleton()->mUseTAAForPeriphery) {
+			//	if (SkyrimUpscaler::GetSingleton()->m_rtv.handle == 0)
+			//		SkyrimUpscaler::GetSingleton()->m_rtv = { reinterpret_cast<uintptr_t>(SkyrimUpscaler::GetSingleton()->mTargetTex.mRTV) };
+			//	SkyrimUpscaler::GetSingleton()->m_runtime->render_effects(SkyrimUpscaler::GetSingleton()->m_runtime->get_command_queue()->get_immediate_command_list(), SkyrimUpscaler::GetSingleton()->m_rtv, SkyrimUpscaler::GetSingleton()->m_rtv);
+			//}
+			if (SkyrimUpscaler::GetSingleton()->mUpscaleDepthForReShade) {
+				SkyrimUpscaler::GetSingleton()->mContext->CopyResource(SkyrimUpscaler::GetSingleton()->mDepthBuffer.mImage, DepthTex.mImage);
 			}
 			SkyrimUpscaler::GetSingleton()->Evaluate(TargetTex.mImage, DepthTex.mDSV);
 			SkyrimUpscaler::GetSingleton()->DelayEnable();
@@ -357,11 +376,11 @@ struct UpscalerHooks
 				beforeTAAImage.mImage = (ID3D11Texture2D*)beforeTAATex;
 				beforeTAAImage.mRTV = RTV;
 			}
-			if (SkyrimUpscaler::GetSingleton()->m_runtime != nullptr) {
-				if (SkyrimUpscaler::GetSingleton()->m_rtv.handle == 0)
-					SkyrimUpscaler::GetSingleton()->m_rtv = { reinterpret_cast<uintptr_t>(beforeTAAImage.mRTV) };
-				SkyrimUpscaler::GetSingleton()->m_runtime->render_effects(SkyrimUpscaler::GetSingleton()->m_runtime->get_command_queue()->get_immediate_command_list(), SkyrimUpscaler::GetSingleton()->m_rtv, SkyrimUpscaler::GetSingleton()->m_rtv);
-			}
+			//if (SkyrimUpscaler::GetSingleton()->m_runtime != nullptr) {
+			//	if (SkyrimUpscaler::GetSingleton()->m_rtv.handle == 0)
+			//		SkyrimUpscaler::GetSingleton()->m_rtv = { reinterpret_cast<uintptr_t>(beforeTAAImage.mRTV) };
+			//	SkyrimUpscaler::GetSingleton()->m_runtime->render_effects(SkyrimUpscaler::GetSingleton()->m_runtime->get_command_queue()->get_immediate_command_list(), SkyrimUpscaler::GetSingleton()->m_rtv, SkyrimUpscaler::GetSingleton()->m_rtv);
+			//}
 			SkyrimUpscaler::GetSingleton()->mContext->CopyResource(SkyrimUpscaler::GetSingleton()->mTempColor.mImage, beforeTAAImage.mImage);
 			func(a1, a2, a3);
 		}

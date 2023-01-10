@@ -119,28 +119,27 @@ void SettingGUI::OnRender()
 		}
 	}
 
-	static int initCounter = -1;
-	if (initCounter > 0) {
-		initCounter--;
-	}
-	if (initCounter == 0) {
-		SkyrimUpscaler::GetSingleton()->InitUpscaler();
-		initCounter = -1;
-	}
-
 	if (mShowGUI) {
 		// Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
 		ImGui::Begin("Skyrim Upscaler Settings", &mShowGUI, ImGuiWindowFlags_NoCollapse);
 		//ImGui::SetWindowSize(ImVec2(576, 340), 0.9f);
 		if (ImGui::Checkbox("Enable", &SkyrimUpscaler::GetSingleton()->mEnableUpscaler)) {
 			SkyrimUpscaler::GetSingleton()->SetEnabled(SkyrimUpscaler::GetSingleton()->mEnableUpscaler);
+			SkyrimUpscaler::GetSingleton()->SaveINI();
 		}
 		//ImGui::Checkbox("Disable Evaluation", &SkyrimUpscaler::GetSingleton()->mDisableEvaluation);
 		//ImGui::Checkbox("Cancel Jitter", &SkyrimUpscaler::GetSingleton()->mCancelJitter);
 		if (ImGui::Checkbox("Use TAA For Periphery", &SkyrimUpscaler::GetSingleton()->mUseTAAForPeriphery)) {
 			UnkOuterStruct::GetSingleton()->SetTAA(SkyrimUpscaler::GetSingleton()->mUseTAAForPeriphery);
 			SkyrimUpscaler::GetSingleton()->mNeedUpdate = true;
+			SkyrimUpscaler::GetSingleton()->SaveINI();
 		}
+		if (ImGui::Checkbox("Upscale Depth For ReShade", &SkyrimUpscaler::GetSingleton()->mUpscaleDepthForReShade)) {
+			SkyrimUpscaler::GetSingleton()->SaveINI();
+		}
+		//if (ImGui::Checkbox("ENB Eye Adaption Fix", &SkyrimUpscaler::GetSingleton()->mENBEyeAdaptionFix)) {
+		//	SkyrimUpscaler::GetSingleton()->SaveINI();
+		//}
 		//ImGui::Checkbox("Debug", &SkyrimUpscaler::GetSingleton()->mDebug);
 		//ImGui::Checkbox("Debug2", &SkyrimUpscaler::GetSingleton()->mDebug2);
 		//ImGui::Checkbox("Debug3", &SkyrimUpscaler::GetSingleton()->mDebug3);
@@ -209,41 +208,34 @@ void SettingGUI::OnRender()
 		}
 		ImGui::EndDisabled();
 
-		bool DLSSAvailable = IsUpscaleMethodAvailable(DLSS);
-		bool FSR2Available = IsUpscaleMethodAvailable(FSR2);
-		bool XeSSAvailable = IsUpscaleMethodAvailable(XESS);
+		const bool DLSSAvailable = IsUpscaleMethodAvailable(DLSS);
+		const bool FSR2Available = IsUpscaleMethodAvailable(FSR2);
+		const bool XeSSAvailable = IsUpscaleMethodAvailable(XESS);
 
-
-		std::vector<const char*> imgui_combo_names{};
-		if (DLSSAvailable)
-			imgui_combo_names.push_back("DLSS");
-		if (FSR2Available)
-			imgui_combo_names.push_back("FSR2");
-		if (XeSSAvailable)
-			imgui_combo_names.push_back("XeSS");
-		if (DLSSAvailable)
-			imgui_combo_names.push_back("DLAA");
-		//Not making it complicated
-		//imgui_combo_names.push_back("TAA");
-
-		int upscaleType = 0;
-		auto upscalerName = "DLSS";
-		if (SkyrimUpscaler::GetSingleton()->mUpscaleType == DLSS)
-			upscalerName = "DLSS";
-		else if (SkyrimUpscaler::GetSingleton()->mUpscaleType == FSR2)
-			upscalerName = "FSR2";
-		else if (SkyrimUpscaler::GetSingleton()->mUpscaleType == XESS)
-			upscalerName = "XeSS";
-		else if (SkyrimUpscaler::GetSingleton()->mUpscaleType == DLAA)
-			upscalerName = "DLAA";
-		else if (SkyrimUpscaler::GetSingleton()->mUpscaleType == TAA)
-			upscalerName = "TAA";
-		for (int i = 0; i < imgui_combo_names.size(); i++) {
-			if (imgui_combo_names[i] == upscalerName) {
-				upscaleType == i;
-				break;
+		static std::map<int, int>       upscalerMap;
+		static std::vector<const char*> imgui_combo_names{};
+		if (upscalerMap.size() == 0) {
+			if (DLSSAvailable) {
+				upscalerMap.insert({ DLSS, imgui_combo_names.size() });
+				imgui_combo_names.push_back("DLSS");
 			}
+			if (FSR2Available) {
+				upscalerMap.insert({ FSR2, imgui_combo_names.size() });
+				imgui_combo_names.push_back("FSR2");
+			}
+			if (XeSSAvailable) {
+				upscalerMap.insert({ XESS, imgui_combo_names.size() });
+				imgui_combo_names.push_back("XeSS");
+			}
+			if (DLSSAvailable) {
+				upscalerMap.insert({ DLAA, imgui_combo_names.size() });
+				imgui_combo_names.push_back("DLAA");
+			}
+			upscalerMap.insert({ TAA, imgui_combo_names.size() });
+			imgui_combo_names.push_back("TAA");
 		}
+
+		int upscaleType = upscalerMap[SkyrimUpscaler::GetSingleton()->mUpscaleType];
 		if (ImGui::Combo("Upscale Type", (int*)&upscaleType, imgui_combo_names.data(), imgui_combo_names.size())) {
 			if (upscaleType < 0 || upscaleType >= imgui_combo_names.size()) {
 				upscaleType = 0;
@@ -260,14 +252,22 @@ void SettingGUI::OnRender()
 				SkyrimUpscaler::GetSingleton()->mUpscaleType = TAA;
 
 			SkyrimUpscaler::GetSingleton()->InitUpscaler();
+			SkyrimUpscaler::GetSingleton()->SaveINI();
 		}
-		const auto qualities = (SkyrimUpscaler::GetSingleton()->mUpscaleType == XESS) ? "Performance\0Balanced\0Quality\0UltraQuality\0" : "Performance\0Balanced\0Quality\0UltraPerformance\0";
+		const auto qualities = (SkyrimUpscaler::GetSingleton()->mUpscaleType == XESS) ? "Performance\0Balanced\0Quality\0UltraQuality\0" : (SkyrimUpscaler::GetSingleton()->mUpscaleType == FSR2) ? "Performance\0Balanced\0Quality\0UltraPerformance\0" :
+		                                                                                                                                                                                                    "Performance\0Balanced\0Quality\0UltraPerformance\0";
 
-		ImGui::BeginDisabled(SkyrimUpscaler::GetSingleton()->mUpscaleType == TAA);
+		ImGui::BeginDisabled(SkyrimUpscaler::GetSingleton()->mUpscaleType >= DLAA);
 		if (ImGui::Combo("Quality Level", (int*)&SkyrimUpscaler::GetSingleton()->mQualityLevel, qualities)) {
 			SkyrimUpscaler::GetSingleton()->InitUpscaler();
+			SkyrimUpscaler::GetSingleton()->SaveINI();
 		}
-
+		ImGui::EndDisabled();
+		if (SkyrimUpscaler::GetSingleton()->mUpscaleType == FSR2) {
+			ImGui::DragFloat("FOV", &SkyrimUpscaler::GetSingleton()->mFOV, 0.1f, 0.0f, 150.0f);
+			//ImGui::DragFloat("Near Plane", &SkyrimUpscaler::GetSingleton()->mNearPlane, 0.1f, 0.0f, 300.0f);
+			//ImGui::DragFloat("Far Plane", &SkyrimUpscaler::GetSingleton()->mFarPlane, 1.0f, 0.0f, 10000.0f);
+		}
 		//const auto w = (float)GetRenderWidth(0);
 		//const auto h = (float)GetRenderHeight(0);
 
@@ -275,34 +275,33 @@ void SettingGUI::OnRender()
 		//	ImGui::DragFloat("MotionScale Y", &SkyrimUpscaler::GetSingleton()->mMotionScale[1], 0.01f, -h, h)) {
 		//	SkyrimUpscaler::GetSingleton()->SetMotionScale(SkyrimUpscaler::GetSingleton()->mMotionScale[0], SkyrimUpscaler::GetSingleton()->mMotionScale[1]);
 		//}
-		ImGui::EndDisabled();
 
 		ImGui::Spacing();
 		if (ImGui::ArrowButton("mFoveatedScaleX-", ImGuiDir_Left)) {
 			SkyrimUpscaler::GetSingleton()->mFoveatedScaleX -= 0.01f;
-			initCounter = 25;
+			SkyrimUpscaler::GetSingleton()->InitUpscaler(true);
 		}
 		ImGui::SameLine(0, 4.0f);
 		if (ImGui::ArrowButton("mFoveatedScaleX+", ImGuiDir_Right)) {
 			SkyrimUpscaler::GetSingleton()->mFoveatedScaleX += 0.01f;
-			initCounter = 45;
+			SkyrimUpscaler::GetSingleton()->InitUpscaler(true);
 		}
 		ImGui::SameLine(0, 4.0f);
 		if (ImGui::DragFloat("Foveated Scale X", &SkyrimUpscaler::GetSingleton()->mFoveatedScaleX, 0.01f, 0.3f, 1.0f)) {
-			initCounter = 45;
+			SkyrimUpscaler::GetSingleton()->InitUpscaler(true);
 		}
 		if (ImGui::ArrowButton("mFoveatedScaleY-", ImGuiDir_Left)) {
 			SkyrimUpscaler::GetSingleton()->mFoveatedScaleY -= 0.01f;
-			initCounter = 45;
+			SkyrimUpscaler::GetSingleton()->InitUpscaler(true);
 		}
 		ImGui::SameLine(0, 4.0f);
 		if (ImGui::ArrowButton("mFoveatedScaleY+", ImGuiDir_Right)) {
 			SkyrimUpscaler::GetSingleton()->mFoveatedScaleY += 0.01f;
-			initCounter = 45;
+			SkyrimUpscaler::GetSingleton()->InitUpscaler(true);
 		}
 		ImGui::SameLine(0, 4.0f);
 		if (ImGui::DragFloat("Foveated Scale Y", &SkyrimUpscaler::GetSingleton()->mFoveatedScaleY, 0.01f, 0.3f, 1.0f)) {
-			initCounter = 45;
+			SkyrimUpscaler::GetSingleton()->InitUpscaler(true);
 		}
 		if (ImGui::ArrowButton("mFoveatedOffsetX-", ImGuiDir_Left)) {
 			SkyrimUpscaler::GetSingleton()->mFoveatedOffsetX -= 0.01f;

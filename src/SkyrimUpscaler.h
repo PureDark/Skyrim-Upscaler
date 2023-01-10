@@ -61,6 +61,10 @@ public:
 	int   mQualityLevel{ 0 };
 	float mMipLodBias{ 0 };
 	int   mJitterPhase{ 0 };
+	float mFOV{ 100 };
+	float mFarPlane{ 3000 };
+	float mNearPlane{ 0.15f };
+	bool  mUseHDRBuffer{ false };
 
 	bool mDisableEvaluation{ false };
 	bool mUseOptimalMipLodBias{ true };
@@ -68,6 +72,7 @@ public:
 	bool mCancelJitter{ false };
 	bool mUseTAAForPeriphery{ true };
 	bool mBlurEdges{ false };
+	bool mUpscaleDepthForReShade{ false };
 
 	bool mNeedUpdate{ true };
 	bool mDebug{ false };
@@ -77,7 +82,11 @@ public:
 	bool mDebug5{ false };
 	bool mDebug6{ false };
 
-	bool mDelayEnable = false;
+	bool mENBEyeAdaptionFix{ false };
+	bool mDelayEnable{ false };
+	int  mOriginalValue{ 0 };
+	int  mOriginalRenderSizeX{ 0 };
+	int  mOriginalRenderSizeY{ 0 };
 	int  mEnableDelayCount{ 0 };
 
 	float mBlurIntensity{ 1.5f };
@@ -95,6 +104,7 @@ public:
 	ImageWrapper mTempDepth;
 	ImageWrapper mMotionVectors;
 	ImageWrapper mOpaqueColor;
+	ImageWrapper mOpaqueColorHDR;
 	ImageWrapper mTransparentMask;
 
 	// For VR Fixed Foveated DLSS
@@ -152,6 +162,8 @@ public:
 	bool IsEnabled();
 	void DelayEnable();
 
+	void GetGameSettings();
+
 	void GetJitters(float* out_x, float* out_y);
 	void SetJitterOffsets(float x, float y);
 
@@ -159,11 +171,12 @@ public:
 	void SetupDepth(ID3D11Texture2D* depth_buffer);
 	void SetupMotionVector(ID3D11Texture2D* motion_buffer);
 	void SetupOpaqueColor(ID3D11Texture2D* opaque_buffer);
+	void SetupOpaqueColorHDR(ID3D11Texture2D* opaque_buffer_hdr);
 	void SetupTransparentMask(ID3D11Texture2D* transparent_buffer);
 	void SetMotionScale(float x, float y);
 	void SetEnabled(bool enabled);
 	void PreInit();
-	void InitUpscaler();
+	void InitUpscaler(bool onlyUpdateValues = false);
 	void SetupD3DBox(float offsetX, float offsetY);
 	bool InFoveatedRect(float x, float y);
 	void InitShader();

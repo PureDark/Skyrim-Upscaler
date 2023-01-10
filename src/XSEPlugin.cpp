@@ -73,7 +73,7 @@ std::string GetLibraryPath(std::string filename)
 	}
 
 	std::string::size_type pos = std::string(path).find_last_of("\\/");
-	return (std::string(path).substr(0, pos) + "/SkyrimUpscaler/" + filename);
+	return (std::string(path).substr(0, pos) + "/../../UpscalerBasePlugin/" + filename);
 }
 
 EXTERN_C [[maybe_unused]] __declspec(dllexport) bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_skse)
@@ -83,16 +83,28 @@ EXTERN_C [[maybe_unused]] __declspec(dllexport) bool SKSEAPI SKSEPlugin_Load(con
 #endif
 
 	InitializeLog();
-	LoadLibrary(GetLibraryPath("nvngx_dlss.dll").c_str());
-	LoadLibrary(GetLibraryPath("ffx_fsr2_api_x64.dll").c_str());
-	LoadLibrary(GetLibraryPath("ffx_fsr2_api_dx12_x64.dll").c_str());
-	LoadLibrary(GetLibraryPath("dxil.dll").c_str());
-	LoadLibrary(GetLibraryPath("dxcompiler.dll").c_str());
-	LoadLibrary(GetLibraryPath("XeFX_Loader.dll").c_str());
-	LoadLibrary(GetLibraryPath("XeFX.dll").c_str());
-	LoadLibrary(GetLibraryPath("libxess.dll").c_str());
-	LoadLibrary(GetLibraryPath("PDPerfPlugin.dll").c_str());
-	logger::info("Loaded plugin");
+	int handle = (int)LoadLibrary(GetLibraryPath("nvngx_dlss.dll").c_str());
+	logger::info("Loaded plugin nvngx_dlss.dll {}", handle);
+	handle = (int)LoadLibrary(GetLibraryPath("ffx_fsr2_api_x64.dll").c_str());
+	logger::info("Loaded plugin ffx_fsr2_api_x64.dll {}", handle);
+	handle = (int)LoadLibrary(GetLibraryPath("ffx_fsr2_api_dx12_x64.dll").c_str());
+	logger::info("Loaded plugin ffx_fsr2_api_dx12_x64.dll {}", handle);
+	handle = (int)LoadLibrary(GetLibraryPath("ffx_fsr2_api_vk_x64.dll").c_str());
+	logger::info("Loaded plugin ffx_fsr2_api_vk_x64.dll {}", handle);
+	handle = (int)LoadLibrary(GetLibraryPath("dxil.dll").c_str());
+	logger::info("Loaded plugin dxil.dll {}", handle);
+	handle = (int)LoadLibrary(GetLibraryPath("dxcompiler.dll").c_str());
+	logger::info("Loaded plugin dxcompiler.dll {}", handle);
+	handle = (int)LoadLibrary(GetLibraryPath("XeFX_Loader.dll").c_str());
+	logger::info("Loaded plugin XeFX_Loader.dll {}", handle);
+	handle = (int)LoadLibrary(GetLibraryPath("XeFX.dll").c_str());
+	logger::info("Loaded plugin XeFX.dll {}", handle);
+	handle = (int)LoadLibrary(GetLibraryPath("libxess.dll").c_str());
+	logger::info("Loaded plugin libxess.dll {}", handle);
+	handle = (int)LoadLibrary(GetLibraryPath("PDPerfPlugin.dll").c_str());
+	logger::info("Loaded plugin PDPerfPlugin.dll {}", handle);
+
+	logger::info("Loaded all plugins");
 
 	SKSE::Init(a_skse);
 
@@ -137,26 +149,26 @@ void unregister_addon_events()
 	reshade::unregister_event<reshade::addon_event::init_effect_runtime>(on_init_effect_runtime);
 }
 
-extern "C" __declspec(dllexport) const char* NAME = "Skyrim Upscaler";
-extern "C" __declspec(dllexport) const char* DESCRIPTION = "Apply effects to correct rendertargets in VR";
-static bool ReShadeInstalled = false;
+//extern "C" __declspec(dllexport) const char* NAME = "Skyrim Upscaler";
+//extern "C" __declspec(dllexport) const char* DESCRIPTION = "Apply effects to correct rendertargets in VR";
+//static bool ReShadeInstalled = false;
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID)
 {
 	switch (fdwReason) {
 	case DLL_PROCESS_ATTACH:
-		ReShadeInstalled = true;
-		if (!reshade::register_addon(hModule)) {
-			ReShadeInstalled = false;
-			return TRUE;
-		}
-		register_addon_events();
+		//ReShadeInstalled = true;
+		//if (!reshade::register_addon(hModule)) {
+		//	ReShadeInstalled = false;
+		//	return TRUE;
+		//}
+		//register_addon_events();
 		break;
 	case DLL_PROCESS_DETACH:
-		if (ReShadeInstalled) {
-			unregister_addon_events();
-			reshade::unregister_addon(hModule);
-		}
+		//if (ReShadeInstalled) {
+		//	unregister_addon_events();
+		//	reshade::unregister_addon(hModule);
+		//}
 		break;
 	}
 

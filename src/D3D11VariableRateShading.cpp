@@ -210,10 +210,27 @@ void D3D11VariableRateShading::PostOMSetRenderTargets(UINT numViews, ID3D11Rende
 
 	ID3D11Resource* resource;
 	renderTargetViews[0]->GetResource(&resource);
-	if (resource != SkyrimUpscaler::GetSingleton()->mOpaqueColor.mImage) {
+	auto opaqueColor = SkyrimUpscaler::GetSingleton()->mUseHDRBuffer ? SkyrimUpscaler::GetSingleton()->mOpaqueColorHDR.mImage : SkyrimUpscaler::GetSingleton()->mOpaqueColor.mImage;
+	if (resource != opaqueColor) {
 		DisableVRS();
 		return;
 	}
+	//D3D11_RENDER_TARGET_VIEW_DESC rtd;
+	//renderTargetViews[0]->GetDesc(&rtd);
+	//if (rtd.ViewDimension != D3D11_RTV_DIMENSION_TEXTURE2D && rtd.ViewDimension != D3D11_RTV_DIMENSION_TEXTURE2DARRAY && rtd.ViewDimension != D3D11_RTV_DIMENSION_TEXTURE2DMS && rtd.ViewDimension != D3D11_RTV_DIMENSION_TEXTURE2DMSARRAY) {
+	//	DisableVRS();
+	//	return;
+	//}
+
+	//ID3D11Resource* resource;
+	//renderTargetViews[0]->GetResource(&resource);
+	//ID3D11Texture2D*     tex = (ID3D11Texture2D*)resource;
+	//D3D11_TEXTURE2D_DESC td;
+	//tex->GetDesc(&td);
+	//if (!(td.Width == SkyrimUpscaler::GetSingleton()->mDisplaySizeX && td.Height == SkyrimUpscaler::GetSingleton()->mDisplaySizeY && td.Format == DXGI_FORMAT_R11G11B10_FLOAT)) {
+	//	DisableVRS();
+	//	return;
+	//}
 	ApplyCombinedVRS();
 }
 
@@ -299,8 +316,8 @@ void D3D11VariableRateShading::SetupCombinedVRS()
 	int vrsHeight = mDisplaySizeY / NV_VARIABLE_PIXEL_SHADING_TILE_HEIGHT;
 	if (vrsHeight & 1)
 		++vrsHeight;
-	bool imageSizeChanged = (combinedVRSTex.mImage && vrsWidth == combinedWidth && vrsHeight == combinedHeight);
-	if (!mNeedUpdate && (!IsEnabled() || imageSizeChanged)) {
+	bool imageSizeUnchanged = (combinedVRSTex.mImage && vrsWidth == combinedWidth && vrsHeight == combinedHeight);
+	if (!mNeedUpdate && (!IsEnabled() || imageSizeUnchanged)) {
 		return;
 	}
 
@@ -317,7 +334,7 @@ void D3D11VariableRateShading::SetupCombinedVRS()
 	combinedWidth = vrsWidth;
 	combinedHeight = vrsHeight;
 
-	if (imageSizeChanged || !combinedVRSTex.mImage) {
+	if (imageSizeUnchanged  || !combinedVRSTex.mImage) {
 		logger::info("Creating combined VRS pattern texture of size  {}x{} for input texture size {}x{} and render size {}x{}", vrsWidth, vrsHeight, mDisplaySizeX, mDisplaySizeY, mRenderSizeX, mRenderSizeY);
 		combinedVRSTex.Release();
 		combinedVRSShowTex.Release();
@@ -377,5 +394,5 @@ void D3D11VariableRateShading::SetupCombinedVRS()
 		data = CreateCombinedFixedFoveatedVRSPatternDebug(vrsWidth, vrsHeight, vrsRenderWidth, vrsRenderHeight);
 		context->UpdateSubresource(combinedVRSShowTex.mImage, 0, NULL, data.data(), 0, 0);
 	}
-	
+
 }

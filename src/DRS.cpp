@@ -19,8 +19,6 @@ void DRS::SetDRSVR(float renderScale)
 {
 	if (renderScale == 0)
 		renderScale = currentScaleFactor;
-	if (SkyrimUpscaler::GetSingleton()->mDebug)
-		renderScale = 0.5f;
 	auto currentWidthRatio = reinterpret_cast<float*>(REL::Offset(0x3186d14).address());
 	auto currentHeightRatio = reinterpret_cast<float*>(REL::Offset(0x3186d18).address());
 	auto previousWidthRatio = reinterpret_cast<float*>(REL::Offset(0x3186d1c).address());
@@ -94,11 +92,29 @@ RE::BSEventNotifyControl MenuOpenCloseEventHandler::ProcessEvent(const RE::MenuO
 		if (a_event->opening) {
 			DRS::GetSingleton()->isInLoadingMenu = true;
 			SkyrimUpscaler::GetSingleton()->mDelayEnable = SkyrimUpscaler::GetSingleton()->mEnableUpscaler;
-			SkyrimUpscaler::GetSingleton()->mEnableUpscaler = false;
+			if (SkyrimUpscaler::GetSingleton()->mENBEyeAdaptionFix) {
+				switch (SkyrimUpscaler::GetSingleton()->mUpscaleType) {
+				case DLSS:
+					SkyrimUpscaler::GetSingleton()->mOriginalValue = SkyrimUpscaler::GetSingleton()->mUpscaleType;
+					SkyrimUpscaler::GetSingleton()->mOriginalRenderSizeX = SkyrimUpscaler::GetSingleton()->mRenderSizeX;
+					SkyrimUpscaler::GetSingleton()->mOriginalRenderSizeY = SkyrimUpscaler::GetSingleton()->mRenderSizeY;
+					SkyrimUpscaler::GetSingleton()->mUpscaleType = DLAA;
+					break;
+				case FSR2:
+				case XESS:
+					//SkyrimUpscaler::GetSingleton()->mOriginalValue = SkyrimUpscaler::GetSingleton()->mQualityLevel;
+					//SkyrimUpscaler::GetSingleton()->mQualityLevel = 4;
+					break;
+				}
+				SkyrimUpscaler::GetSingleton()->mUpscaleType = DLAA;
+				SkyrimUpscaler::GetSingleton()->InitUpscaler(true);
+			}
+			UnkOuterStruct::GetSingleton()->SetTAA(false);
+			SkyrimUpscaler::GetSingleton()->mNeedUpdate = true;
 		} else {
 			DRS::GetSingleton()->isInLoadingMenu = false;
 			if (SkyrimUpscaler::GetSingleton()->mDelayEnable)
-				SkyrimUpscaler::GetSingleton()->mEnableDelayCount = 120;
+				SkyrimUpscaler::GetSingleton()->mEnableDelayCount = 150;
 		}
 	}
 	if (a_event->menuName == RE::MainMenu::MENU_NAME ||
