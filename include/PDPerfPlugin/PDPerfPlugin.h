@@ -113,3 +113,5 @@ extern "C" __declspec(dllexport) void __stdcall InitLogDelegate(void (*Log)(char
 extern "C" __declspec(dllexport) bool __stdcall IsUpscaleMethodAvailable(int upscaleMethod);
 
 extern "C" __declspec(dllexport) char* __stdcall GetUpscaleMethodName(int upscaleMethod);
+
+extern "C" __declspec(dllexport) bool __stdcall QueryRenderSize(int inDisplaySizeX, int inDisplaySizeY, int inQualValue, int* outRenderSizeX, int* outRenderSizeY);
