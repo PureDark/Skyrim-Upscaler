@@ -55,12 +55,15 @@ public:
 	ID3D11RenderTargetView*   mRTV{ nullptr };
 	ID3D11ShaderResourceView* mSRV{ nullptr };
 	ID3D11DepthStencilView*   mDSV{ nullptr };
+	D3D11_TEXTURE2D_DESC      mDesc;
 	ID3D11RenderTargetView*   GetRTV()
 	{
 		if (mImage != nullptr && mRTV == nullptr) {
 			ID3D11Device* device;
 			mImage->GetDevice(&device);
-			device->CreateRenderTargetView(mImage, NULL, &mRTV);
+			HRESULT hr = device->CreateRenderTargetView(mImage, NULL, &mRTV);
+			if (FAILED(hr))
+				logger::error("Failed to Create RTV ErrorCode: 0x%08x", hr);
 		}
 		return mRTV;
 	}
@@ -69,7 +72,27 @@ public:
 		if (mImage != nullptr && mSRV == nullptr) {
 			ID3D11Device* device;
 			mImage->GetDevice(&device);
-			device->CreateShaderResourceView(mImage, NULL, &mSRV);
+			D3D11_TEXTURE2D_DESC desc;
+			mImage->GetDesc(&desc);
+			HRESULT hr;
+			if (desc.Format == DXGI_FORMAT_R24G8_TYPELESS) {
+				D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc;
+				ZeroMemory(&srvDesc, sizeof(D3D11_SHADER_RESOURCE_VIEW_DESC));
+				srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+				srvDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+				srvDesc.Texture2D.MipLevels = 1;
+				hr = device->CreateShaderResourceView(mImage, &srvDesc, &mSRV);
+			} else if (desc.Format == DXGI_FORMAT_R16G16_TYPELESS) {
+				D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc;
+				ZeroMemory(&srvDesc, sizeof(D3D11_SHADER_RESOURCE_VIEW_DESC));
+				srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+				srvDesc.Format = DXGI_FORMAT_R16G16_UNORM;
+				srvDesc.Texture2D.MipLevels = 1;
+				hr = device->CreateShaderResourceView(mImage, &srvDesc, &mSRV);
+			} else
+				hr = device->CreateShaderResourceView(mImage, NULL, &mSRV);
+			if (FAILED(hr))
+				logger::error("Failed to Create SRV ErrorCode: 0x%08x", hr);
 		}
 		return mSRV;
 	}
@@ -83,17 +106,18 @@ public:
 			desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
 			desc.Flags = 0;
 			desc.Texture2D.MipSlice = 0;
-			device->CreateDepthStencilView(mImage, &desc, &mDSV);
+			HRESULT hr = device->CreateDepthStencilView(mImage, &desc, &mDSV);
+			if (FAILED(hr))
+				logger::error("Failed to Create DSV ErrorCode: 0x%08x", hr);
 		}
 		return mDSV;
 	}
 	D3D11_TEXTURE2D_DESC GetDesc()
 	{
-		D3D11_TEXTURE2D_DESC desc;
-		if (mImage != nullptr) {
-			mImage->GetDesc(&desc);
+		if (mImage != nullptr ) {
+			mImage->GetDesc(&mDesc);
 		}
-		return desc;
+		return mDesc;
 	}
 	void Release()
 	{
