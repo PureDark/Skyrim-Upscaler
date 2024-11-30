@@ -93,21 +93,16 @@ ImVec2 GetTextureDimensions(ID3D11ShaderResourceView* view)
 void SettingGUI::OnRender()
 {
 	if (REL::Module::IsVR()) {
-		ProcessEvent(mToggleHotkey, SkyrimUpscaler::GetSingleton()->mToggleUpscaler);
+		ProcessEvent((ImGuiKey)mToggleHotkey, (ImGuiKey)SkyrimUpscaler::GetSingleton()->mToggleUpscaler);
 	}
 
-	if (ImGui::IsKeyReleased(mToggleHotkey))
+	if (ImGui::IsKeyReleased((ImGuiKey)mToggleHotkey))
 		toggle();
-	if (ImGui::IsKeyReleased(SkyrimUpscaler::GetSingleton()->mToggleUpscaler))
+	if (ImGui::IsKeyReleased((ImGuiKey)SkyrimUpscaler::GetSingleton()->mToggleUpscaler))
 		SkyrimUpscaler::GetSingleton()->SetEnabled(!SkyrimUpscaler::GetSingleton()->mEnableUpscaler);
 
 	auto& io = ImGui::GetIO();
 	io.MouseDrawCursor = mShowGUI;
-
-	// Start the Dear ImGui frame
-	ImGui_ImplDX11_NewFrame();
-	ImGui_ImplWin32_NewFrame();
-	ImGui::NewFrame();
 
 	if (!REL::Module::IsVR()) {
 		static bool lastShowGUI = false;
@@ -120,6 +115,10 @@ void SettingGUI::OnRender()
 	}
 
 	if (mShowGUI) {
+		// Start the Dear ImGui frame
+		ImGui_ImplDX11_NewFrame();
+		ImGui_ImplWin32_NewFrame();
+		ImGui::NewFrame();
 		// Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
 		ImGui::Begin("Skyrim Upscaler Settings", &mShowGUI, ImGuiWindowFlags_NoCollapse);
 		//ImGui::SetWindowSize(ImVec2(576, 340), 0.9f);
@@ -444,11 +443,11 @@ void SettingGUI::OnRender()
 		}
 
 		ImGui::End();
-	}
 
-	// Rendering
-	ImGui::Render();
-	ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+		// Rendering
+		ImGui::Render();
+		ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+	}
 }
 
 void SettingGUI::OnCleanup()

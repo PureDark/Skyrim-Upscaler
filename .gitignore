@@ -3,5 +3,4 @@ dist/
 vcpkg_installed/
 .idea/
 include/steam/
-extern/nvapi/
 docs/

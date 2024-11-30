@@ -242,7 +242,7 @@ void D3D11VariableRateShading::ApplyCombinedVRS()
 	SetupCombinedVRS();
 	NvAPI_Status status = NvAPI_D3D11_RSSetShadingRateResourceView(context, combinedVRSView);
 	if (status != NVAPI_OK) {
-		logger::error("Error while setting shading rate resource view: {}", status);
+		logger::error("Error while setting shading rate resource view: {}", (int)status);
 		Shutdown();
 		return;
 	}
@@ -265,7 +265,7 @@ void D3D11VariableRateShading::DisableVRS()
 	srd.pViewports = vsrd;
 	NvAPI_Status status = NvAPI_D3D11_RSSetViewportsPixelShadingRates(context, &srd);
 	if (status != NVAPI_OK) {
-		logger::error("Error while setting shading rates: {}", status);
+		logger::error("Error while setting shading rates: {}", (int)status);
 		Shutdown();
 	}
 }
@@ -303,7 +303,7 @@ void D3D11VariableRateShading::EnableVRS()
 	srd.pViewports = vsrd;
 	NvAPI_Status status = NvAPI_D3D11_RSSetViewportsPixelShadingRates(context, &srd);
 	if (status != NVAPI_OK) {
-		logger::error("Error while setting shading rates: {}", status);
+		logger::error("Error while setting shading rates: {}", (int)status);
 		Shutdown();
 	}
 }
