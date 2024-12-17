@@ -1,34 +1,13 @@
-option(BUILD_SKYRIM "Build for Skyrim" OFF)
-option(BUILD_SKYRIMVR "Build for Skyrim VR" OFF)
-option(BUILD_FALLOUT4 "Build for Fallout 4" OFF)
-
-if(BUILD_SKYRIM)
-	add_compile_definitions(SKYRIM)
-	set(CommonLibName "CommonLibSSE")
-	set(GameVersion "Skyrim")
-elseif(BUILD_SKYRIMVR)
-	add_compile_definitions(SKYRIMVR)
-	add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
-	set(CommonLibName "CommonLibVR")
-	set(GameVersion "Skyrim VR")
-elseif(BUILD_FALLOUT4)
-	add_compile_definitions(FALLOUT4)
-	set(CommonLibPath "CommonLibF4/CommonLibF4")
-	set(CommonLibName "external/CommonLibF4")
-	set(GameVersion "Fallout 4")
-else()
-	message(
-	FATAL_ERROR
-		"A game must be selected."
-	)
-endif()
+add_compile_definitions(SKYRIM)
+set(CommonLibPath "extern/CommonLibSSE-NG")
+set(CommonLibName "CommonLibSSE")
 
 add_library("${PROJECT_NAME}" SHARED)
 
 target_compile_features(
 	"${PROJECT_NAME}"
 	PRIVATE
-		cxx_std_23
+	cxx_std_23
 )
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
@@ -82,7 +61,7 @@ set(Boost_USE_STATIC_LIBS ON)
 set(Boost_USE_STATIC_RUNTIME ON)
 
 if (CMAKE_GENERATOR MATCHES "Visual Studio")
-	# add_compile_definitions(_UNICODE)
+	add_compile_definitions(_UNICODE)
 
 	target_compile_definitions(${PROJECT_NAME} PRIVATE "$<$<CONFIG:DEBUG>:DEBUG>")
 
@@ -116,6 +95,7 @@ if (CMAKE_GENERATOR MATCHES "Visual Studio")
 			/Zc:trigraphs
 			/Zc:wchar_t
 			/wd4200 # nonstandard extension used : zero-sized array in struct/union
+			/arch:AVX
 			/utf-8
 	)
 
@@ -140,28 +120,28 @@ if (CMAKE_GENERATOR MATCHES "Visual Studio")
 	set_target_properties(${PROJECT_NAME}  PROPERTIES LINK_FLAGS "${space_separated_list}")
 endif()
 
-find_package(nlohmann_json CONFIG REQUIRED)
-find_package(magic_enum CONFIG REQUIRED)
-find_package(imgui CONFIG REQUIRED)
-
-if (BUILD_SKYRIM)
-	find_package(CommonLibSSE REQUIRED)
-	target_link_libraries(
-		${PROJECT_NAME} 
-		PUBLIC 
-			CommonLibSSE::CommonLibSSE
-			imgui::imgui
-		PRIVATE
-			magic_enum::magic_enum
-			debug ${CMAKE_CURRENT_SOURCE_DIR}/extern/detours/x64/Debug/detours.lib
-			optimized ${CMAKE_CURRENT_SOURCE_DIR}/extern/detours/x64/Release/detours.lib
-			debug ${CMAKE_CURRENT_SOURCE_DIR}/extern/PDPerfPlugin.lib
-			optimized ${CMAKE_CURRENT_SOURCE_DIR}/extern/PDPerfPlugin.lib
-			debug ${CMAKE_CURRENT_SOURCE_DIR}/extern/nvapi/amd64/nvapi64.lib
-			optimized ${CMAKE_CURRENT_SOURCE_DIR}/extern/nvapi/amd64/nvapi64.lib
-	)
-else()
-	add_subdirectory(${CommonLibPath} ${CommonLibName} EXCLUDE_FROM_ALL)
-endif()
+add_subdirectory(${CommonLibPath} ${CommonLibName} EXCLUDE_FROM_ALL)
 
 find_package(spdlog CONFIG REQUIRED)
+
+target_include_directories(
+	${PROJECT_NAME}
+	PUBLIC
+		${CMAKE_CURRENT_SOURCE_DIR}/include
+		imgui::imgui
+	PRIVATE
+		${CMAKE_CURRENT_BINARY_DIR}/cmake
+		${CMAKE_CURRENT_SOURCE_DIR}/src
+		debug ${CMAKE_CURRENT_SOURCE_DIR}/extern/detours/x64/Debug/detours.lib
+		optimized ${CMAKE_CURRENT_SOURCE_DIR}/extern/detours/x64/Release/detours.lib
+		debug ${CMAKE_CURRENT_SOURCE_DIR}/extern/PDPerfPlugin.lib
+		optimized ${CMAKE_CURRENT_SOURCE_DIR}/extern/PDPerfPlugin.lib
+		debug ${CMAKE_CURRENT_SOURCE_DIR}/extern/nvapi/amd64/nvapi64.lib
+		optimized ${CMAKE_CURRENT_SOURCE_DIR}/extern/nvapi/amd64/nvapi64.lib
+)
+
+target_link_libraries(
+	${PROJECT_NAME}
+	PUBLIC
+	CommonLibSSE::CommonLibSSE
+)

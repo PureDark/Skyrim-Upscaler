@@ -1,6 +1,3 @@
-[submodule "external/CommonLibSSE"]
-	path = external/CommonLibSSE
-	url = https://github.com/powerof3/CommonLibSSE.git
-[submodule "external/CommonLibAE"]
-	path = external/CommonLibAE
-	url = https://github.com/powerof3/CommonLibSSE.git
+[submodule "extern/CommonLibSSE-NG"]
+	path = extern/CommonLibSSE-NG
+	url = https://github.com/alandtse/CommonLibVR.git

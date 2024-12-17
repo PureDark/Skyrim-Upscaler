@@ -424,6 +424,15 @@ void SkyrimUpscaler::SetupTarget(ID3D11Texture2D* target_buffer)
 void SkyrimUpscaler::SetupDepth(ID3D11Texture2D* depth_buffer)
 {
 	mDepthBuffer.mImage = depth_buffer;
+	if (depth_buffer) {
+		auto desc = mDepthBuffer.GetDesc();
+		auto desc2 = mTempDepth.GetDesc();
+		if (!mTempDepth.mImage || desc.Width != desc2.Width || desc.Height != desc2.Height || desc.Format != desc2.Format) {
+			mTempDepth.Release();
+			desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+			mDevice->CreateTexture2D(&desc, NULL, &mTempDepth.mImage);
+		}
+	}
 }
 
 void SkyrimUpscaler::SetupOpaqueColor(ID3D11Texture2D* opaque_buffer)
@@ -509,12 +518,6 @@ void SkyrimUpscaler::InitUpscaler(bool onlyUpdateValues)
 			desc.Width = mDisplaySizeX;
 			desc.Height = mDisplaySizeY;
 			mDevice->CreateTexture2D(&desc, NULL, &mAccumulateTex.mImage);
-		}
-		if (!mTempDepth.mImage) {
-			D3D11_TEXTURE2D_DESC desc2;
-			mDepthBuffer.mImage->GetDesc(&desc2);
-			desc2.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-			mDevice->CreateTexture2D(&desc2, NULL, &mTempDepth.mImage);
 		}
 		mFoveatedRenderSizeX = mRenderSizeX * mFoveatedScaleX / 2;
 		mFoveatedRenderSizeY = mRenderSizeY * mFoveatedScaleY;

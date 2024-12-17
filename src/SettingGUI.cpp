@@ -104,6 +104,11 @@ void SettingGUI::OnRender()
 	auto& io = ImGui::GetIO();
 	io.MouseDrawCursor = mShowGUI;
 
+	// Start the Dear ImGui frame
+	ImGui_ImplDX11_NewFrame();
+	ImGui_ImplWin32_NewFrame();
+	ImGui::NewFrame();
+
 	if (!REL::Module::IsVR()) {
 		static bool lastShowGUI = false;
 		if (mShowGUI != lastShowGUI) {
@@ -115,10 +120,6 @@ void SettingGUI::OnRender()
 	}
 
 	if (mShowGUI) {
-		// Start the Dear ImGui frame
-		ImGui_ImplDX11_NewFrame();
-		ImGui_ImplWin32_NewFrame();
-		ImGui::NewFrame();
 		// Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
 		ImGui::Begin("Skyrim Upscaler Settings", &mShowGUI, ImGuiWindowFlags_NoCollapse);
 		//ImGui::SetWindowSize(ImVec2(576, 340), 0.9f);
@@ -443,11 +444,11 @@ void SettingGUI::OnRender()
 		}
 
 		ImGui::End();
-
-		// Rendering
-		ImGui::Render();
-		ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 	}
+
+	// Rendering
+	ImGui::Render();
+	ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 }
 
 void SettingGUI::OnCleanup()

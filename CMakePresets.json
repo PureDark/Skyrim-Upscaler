@@ -1,90 +1,54 @@
 {
 	"configurePresets": [
 		{
-			"binaryDir": "${sourceDir}/build",
-			"cacheVariables": {
-				"CMAKE_BUILD_TYPE": {
-					"type": "STRING",
-					"value": "Debug"
-				}
-			},
-			"errors": {
-				"deprecated": true
-			},
+			"name": "common",
 			"hidden": true,
-			"name": "cmake-dev",
-			"warnings": {
-				"deprecated": true,
-				"dev": true
+			"cacheVariables": {
+				"SKSE_SUPPORT_XBYAK": "ON"
+			},
+			"binaryDir": "${sourceDir}/build/${presetName}"
+		},
+		{
+			"name": "vcpkg",
+			"hidden": true,
+			"cacheVariables": {
+				"CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+				"VCPKG_OVERLAY_PORTS": "${sourceDir}/cmake/ports/",
+				"VCPKG_TARGET_TRIPLET": "x64-windows-static-md"
 			}
 		},
 		{
-			"cacheVariables": {
-				"CMAKE_TOOLCHAIN_FILE": {
-					"type": "STRING",
-					"value": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
-				}
-			},
+			"name": "win64",
 			"hidden": true,
-			"name": "vcpkg"
+			"architecture": "x64",
+			"cacheVariables": {
+				"CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL"
+			}
 		},
 		{
-			"cacheVariables": {
-				"CMAKE_MSVC_RUNTIME_LIBRARY": {
-					"type": "STRING",
-					"value": "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL"
-				},
-				"VCPKG_TARGET_TRIPLET": {
-					"type": "STRING",
-					"value": "x64-windows-static-md"
-				}
-			},
+			"name": "msvc",
 			"hidden": true,
-			"name": "windows"
-		},
-		{
-			"architecture": {
-				"strategy": "set",
-				"value": "x64"
-			},
 			"cacheVariables": {
-				"CMAKE_CXX_FLAGS": "/EHsc /MP /W4 /WX"
+				"CMAKE_CXX_FLAGS": "/EHsc /MP /W4 /WX $penv{CXXFLAGS}"
 			},
 			"generator": "Visual Studio 17 2022",
-			"inherits": [
-				"cmake-dev",
-				"vcpkg",
-				"windows"
-			],
-			"hidden": true,
-			"name": "vs2022-windows",
-			"toolset": "v143"
+			"vendor": {
+				"microsoft.com/VisualStudioSettings/CMake/1.0": {
+					"intelliSenseMode": "windows-msvc-x64",
+					"enableMicrosoftCodeAnalysis": true,
+					"enableClangTidyCodeAnalysis": true
+				}
+			}
 		},
 		{
-			"binaryDir": "${sourceDir}/build/skyrim",
-			"cacheVariables": {
-				"BUILD_SKYRIM": true
-			},
+			"name": "skyrim",
+			"hidden": false,
 			"inherits": [
-				"cmake-dev",
+				"common",
 				"vcpkg",
-				"windows",
-				"vs2022-windows"
-			],
-			"name": "skyrim"
-		},
-		{
-			"binaryDir": "${sourceDir}/build/vr",
-			"cacheVariables": {
-				"BUILD_SKYRIMVR": true
-			},
-			"inherits": [
-				"cmake-dev",
-				"vcpkg",
-				"windows",
-				"vs2022-windows"
-			],
-			"name": "vr"
+				"win64",
+				"msvc"
+			]
 		}
 	],
 	"version": 3

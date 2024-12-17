@@ -22,7 +22,7 @@ static int                                                          index;
 
 decltype(&D3D11CreateDeviceAndSwapChain)      ptrD3D11CreateDeviceAndSwapChain;
 decltype(&IDXGISwapChain::Present)            ptrPresent;
-decltype(&ID3D11Device::CreateTexture2D)      ptrCreateTexture2D;
+//decltype(&ID3D11Device::CreateTexture2D)      ptrCreateTexture2D;
 decltype(&ID3D11DeviceContext::PSSetSamplers) ptrPSSetSamplers;
 decltype(&ID3D11DeviceContext::VSSetSamplers) ptrVSSetSamplers;
 decltype(&ID3D11DeviceContext::GSSetSamplers) ptrGSSetSamplers;
@@ -33,6 +33,8 @@ decltype(&ID3D11DeviceContext::CSSetSamplers) ptrCSSetSamplers;
 decltype(&ID3D11DeviceContext::OMSetRenderTargets) ptrOMSetRenderTargets;
 decltype(&ID3D11DeviceContext::OMSetRenderTargetsAndUnorderedAccessViews) ptrOMSetRenderTargetsAndUnorderedAccessViews;
 
+static auto upscaler = SkyrimUpscaler::GetSingleton();
+
 static void MyLog(char* message, int size)
 {
 	logger::info("{}", message);
@@ -41,16 +43,16 @@ static void MyLog(char* message, int size)
 void WINAPI hk_ID3D11DeviceContext_OMSetRenderTargets(ID3D11DeviceContext* This, UINT NumViews, ID3D11RenderTargetView* const* ppRenderTargetViews, ID3D11DepthStencilView* pDepthStencilView)
 {
 	(This->*ptrOMSetRenderTargets)(NumViews, ppRenderTargetViews, pDepthStencilView);
-	if (SkyrimUpscaler::GetSingleton()->mVRS)
-		SkyrimUpscaler::GetSingleton()->mVRS->PostOMSetRenderTargets(NumViews, ppRenderTargetViews, pDepthStencilView);
+	if (upscaler->mVRS)
+		upscaler->mVRS->PostOMSetRenderTargets(NumViews, ppRenderTargetViews, pDepthStencilView);
 }
 
 void WINAPI hk_ID3D11DeviceContext_OMSetRenderTargetsAndUnorderedAccessViews(ID3D11DeviceContext* This, UINT NumRTVs, ID3D11RenderTargetView* const* ppRenderTargetViews, ID3D11DepthStencilView* pDepthStencilView, 
 	UINT UAVStartSlot, UINT NumUAVs, ID3D11UnorderedAccessView* const* ppUnorderedAccessViews, const UINT* pUAVInitialCounts)
 {
 	(This->*ptrOMSetRenderTargetsAndUnorderedAccessViews)(NumRTVs, ppRenderTargetViews, pDepthStencilView, UAVStartSlot, NumUAVs, ppUnorderedAccessViews, pUAVInitialCounts);
-	if (SkyrimUpscaler::GetSingleton()->mVRS)
-		SkyrimUpscaler::GetSingleton()->mVRS->PostOMSetRenderTargets(NumRTVs, ppRenderTargetViews, pDepthStencilView);
+	if (upscaler->mVRS)
+		upscaler->mVRS->PostOMSetRenderTargets(NumRTVs, ppRenderTargetViews, pDepthStencilView);
 }
 
 
@@ -59,92 +61,17 @@ HRESULT WINAPI hk_IDXGISwapChain_Present(IDXGISwapChain* This, UINT SyncInterval
 	SettingGUI::GetSingleton()->OnRender();
 	auto hr = (This->*ptrPresent)(SyncInterval, Flags);
 	DRS::GetSingleton()->Update();
-	return hr;
-}
 
-HRESULT WINAPI hk_ID3D11Device_CreateTexture2D(ID3D11Device* This, const D3D11_TEXTURE2D_DESC* pDesc, const D3D11_SUBRESOURCE_DATA* pInitialData, ID3D11Texture2D** ppTexture2D)
-{
-	auto hr = (This->*ptrCreateTexture2D)(pDesc, pInitialData, ppTexture2D);
-	static bool locking = false;
-	if (locking)
-		return hr;
-	if (pDesc->Format == DXGI_FORMAT_R16G16_FLOAT && pDesc->BindFlags == (D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET)) {
-		if (SkyrimUpscaler::GetSingleton()->mDisplaySizeX > 0) {
-			if (pDesc->Width != SkyrimUpscaler::GetSingleton()->mDisplaySizeX ||
-				pDesc->Height != SkyrimUpscaler::GetSingleton()->mDisplaySizeY)
-				return hr;
-		}
-		if (SettingGUI::GetSingleton()->sorted_item_list.size() > 0 && !REL::Module::IsVR())
-			return hr;
-		motion_item item = { 1u, *ppTexture2D, *pDesc };
-		SettingGUI::GetSingleton()->sorted_item_list.push_back(item);
-		SettingGUI::GetSingleton()->selected_item = item;
-		locking = true;
-		SkyrimUpscaler::GetSingleton()->SetupMotionVector(SettingGUI::GetSingleton()->selected_item.resource);
-		locking = false;
-		//SkyrimUpscaler::GetSingleton()->InitUpscaler();
-		logger::info("Motion Vertor Found : {} x {}", pDesc->Width, pDesc->Height);
-	} else if (pDesc->Format >= DXGI_FORMAT_R24G8_TYPELESS && pDesc->Format <= DXGI_FORMAT_X24_TYPELESS_G8_UINT) {
-		if (pDesc->Width == SkyrimUpscaler::GetSingleton()->mDisplaySizeX &&
-			pDesc->Height == SkyrimUpscaler::GetSingleton()->mDisplaySizeY &&
-			pDesc->BindFlags & D3D11_BIND_DEPTH_STENCIL) {
-			logger::info("Depth Buffer Found : {} x {}", pDesc->Width, pDesc->Height);
-			static int VRSkip = REL::Module::IsVR() ? 3 : 0;
-			if (VRSkip > 0) {
-				VRSkip--;
-				return hr;
+	
+	if (auto r = BSGraphics::Renderer::QInstance()) {
+		for (int i = 0; i < RENDER_TARGET_COUNT; i++) {
+			auto rt = r->pRenderTargets[i];
+			if (rt.Texture != NULL && (rt.Texture == upscaler->mOpaqueColor.mImage || rt.Texture == upscaler->mOpaqueColorHDR.mImage)) {
+				bool a = true;
 			}
-			if (SkyrimUpscaler::GetSingleton()->mDepthBuffer.mImage != nullptr)
-				return hr;
-			locking = true;
-			SkyrimUpscaler::GetSingleton()->SetupDepth(*ppTexture2D);
-			locking = false;
-			SkyrimUpscaler::GetSingleton()->InitUpscaler();
-		}
-	} else if (pDesc->Format == DXGI_FORMAT_R8G8_UNORM) {
-		if (pDesc->Width == SkyrimUpscaler::GetSingleton()->mDisplaySizeX &&
-			pDesc->Height == SkyrimUpscaler::GetSingleton()->mDisplaySizeY) {
-			logger::info("Transparent Buffer Found : {} x {}", pDesc->Width, pDesc->Height);
-			static int Skip = 1;
-			if (Skip > 0) {
-				Skip--;
-				return hr;
+			if (rt.TextureCopy != NULL && (rt.TextureCopy == upscaler->mOpaqueColor.mImage || rt.TextureCopy == upscaler->mOpaqueColorHDR.mImage)) {
+				bool b = true;
 			}
-			if (SkyrimUpscaler::GetSingleton()->mTransparentMask.mImage != nullptr)
-				return hr;
-			locking = true;
-			SkyrimUpscaler::GetSingleton()->SetupTransparentMask(*ppTexture2D);
-			locking = false;
-		}
-	} else if (pDesc->Format == DXGI_FORMAT_R11G11B10_FLOAT) {
-		if (pDesc->Width == SkyrimUpscaler::GetSingleton()->mDisplaySizeX &&
-			pDesc->Height == SkyrimUpscaler::GetSingleton()->mDisplaySizeY) {
-			logger::info("Opaque Buffer Found : {} x {}", pDesc->Width, pDesc->Height);
-			static int Skip = 1;
-			if (Skip > 0) {
-				Skip--;
-				return hr;
-			}
-			if (SkyrimUpscaler::GetSingleton()->mOpaqueColor.mImage != nullptr)
-				return hr;
-			locking = true;
-			SkyrimUpscaler::GetSingleton()->SetupOpaqueColor(*ppTexture2D);
-			locking = false;
-		}
-	} else if (pDesc->Format == DXGI_FORMAT_R16G16B16A16_FLOAT) {
-		if (pDesc->Width == SkyrimUpscaler::GetSingleton()->mDisplaySizeX &&
-			pDesc->Height == SkyrimUpscaler::GetSingleton()->mDisplaySizeY) {
-			logger::info("Opaque Buffer HDR Found : {} x {}", pDesc->Width, pDesc->Height);
-			static int Skip = 1;
-			if (Skip > 0) {
-				Skip--;
-				return hr;
-			}
-			if (SkyrimUpscaler::GetSingleton()->mOpaqueColorHDR.mImage != nullptr)
-				return hr;
-			locking = true;
-			SkyrimUpscaler::GetSingleton()->SetupOpaqueColorHDR(*ppTexture2D);
-			locking = false;
 		}
 	}
 	return hr;
@@ -155,11 +82,11 @@ HRESULT WINAPI hk_ID3D11Device_CreateTexture2D(ID3D11Device* This, const D3D11_T
 static void SetMipLodBias(ID3D11SamplerState** outSamplers, UINT StartSlot, UINT NumSamplers, ID3D11SamplerState* const* ppSamplers)
 {
 	static int Skip = 0;
-	if (mipLodBias != SkyrimUpscaler::GetSingleton()->mMipLodBias) {
-		logger::info("MIP LOD Bias changed from  {} to {}, recreating samplers", mipLodBias, SkyrimUpscaler::GetSingleton()->mMipLodBias);
+	if (mipLodBias != upscaler->mMipLodBias) {
+		logger::info("MIP LOD Bias changed from  {} to {}, recreating samplers", mipLodBias, upscaler->mMipLodBias);
 		passThroughSamplers.clear();
 		mappedSamplers.clear();
-		mipLodBias = SkyrimUpscaler::GetSingleton()->mMipLodBias;
+		mipLodBias = upscaler->mMipLodBias;
 		Skip = 1;
 	}
 	memcpy(outSamplers, ppSamplers, NumSamplers * sizeof(ID3D11SamplerState*));
@@ -181,7 +108,7 @@ static void SetMipLodBias(ID3D11SamplerState** outSamplers, UINT StartSlot, UINT
 			}
 			sd.MipLODBias = mipLodBias;
 
-			SkyrimUpscaler::GetSingleton()->mDevice->CreateSamplerState(&sd, &mappedSamplers[orig]);
+			upscaler->mDevice->CreateSamplerState(&sd, &mappedSamplers[orig]);
 			passThroughSamplers.insert(mappedSamplers[orig]);
 		}
 		outSamplers[i] = mappedSamplers[orig];
@@ -268,13 +195,13 @@ HRESULT WINAPI hk_D3D11CreateDeviceAndSwapChain(
 	auto swapChain = *ppSwapChain;
 	IDXGISwapChain2* unwrappedSwapChain;
 	swapChain->QueryInterface(IID_PPV_ARGS(&unwrappedSwapChain));
-	SkyrimUpscaler::GetSingleton()->SetupSwapChain(unwrappedSwapChain);
-	SkyrimUpscaler::GetSingleton()->PreInit();
+	upscaler->SetupSwapChain(unwrappedSwapChain);
+	upscaler->PreInit();
 	SettingGUI::GetSingleton()->InitIMGUI(swapChain, device, deviceContext);
 	InitLogDelegate(MyLog);
 	logger::info("Detouring virtual function tables");
 	*(uintptr_t*)&ptrPresent = Detours::X64::DetourClassVTable(*(uintptr_t*)swapChain, &hk_IDXGISwapChain_Present, 8);
-	*(uintptr_t*)&ptrCreateTexture2D = Detours::X64::DetourClassVTable(*(uintptr_t*)device, &hk_ID3D11Device_CreateTexture2D, 5);
+	//*(uintptr_t*)&ptrCreateTexture2D = Detours::X64::DetourClassVTable(*(uintptr_t*)device, &hk_ID3D11Device_CreateTexture2D, 5);
 	*(uintptr_t*)&ptrPSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_PSSetSamplers, 10);
 	*(uintptr_t*)&ptrVSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_VSSetSamplers, 26);
 	*(uintptr_t*)&ptrGSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_GSSetSamplers, 32);
@@ -297,9 +224,11 @@ struct UpscalerHooks
 		{
 			func();
 			MenuOpenCloseEventHandler::Register();
-			
-			// Depth not found at this point
-			//SkyrimUpscaler::GetSingleton()->InitUpscaler();
+
+			static auto  renderer = RE::BSGraphics::Renderer::GetSingleton();
+			static auto& depthTexture = renderer->GetDepthStencilData().depthStencils[RE::RENDER_TARGETS_DEPTHSTENCIL::kPOST_ZPREPASS_COPY];
+			static auto& motionVectorsTexture = renderer->GetRuntimeData().renderTargets[RE::RENDER_TARGET::kMOTION_VECTOR];
+			upscaler->InitUpscaler();
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
@@ -308,18 +237,28 @@ struct UpscalerHooks
 	{
 		static void thunk(RE::BSImagespaceShader* param_1, uint64_t param_2)
 		{
-			if (SkyrimUpscaler::GetSingleton()->mNeedUpdate || 
-				SkyrimUpscaler::GetSingleton()->mTargetTex.mImage == nullptr) {
-				SkyrimUpscaler::GetSingleton()->mNeedUpdate = false;
-				UnkOuterStruct::GetSingleton()->SetTAA(SkyrimUpscaler::GetSingleton()->mUseTAAForPeriphery);
-				ID3D11RenderTargetView* RTV;
-				ID3D11DepthStencilView* DSV;
-				SkyrimUpscaler::GetSingleton()->mContext->OMGetRenderTargets(1, &RTV, &DSV);
-				ID3D11Resource* resource;
-				RTV->GetResource(&resource);
-				SkyrimUpscaler::GetSingleton()->SetupTarget((ID3D11Texture2D*)resource);
-				SkyrimUpscaler::GetSingleton()->mTargetTex.mRTV = RTV;
+			if (upscaler->mNeedUpdate || 
+				upscaler->mTargetTex.mImage == nullptr) {
+				upscaler->mNeedUpdate = false;
+				//UnkOuterStruct::GetSingleton()->SetTAA(upscaler->mUseTAAForPeriphery);
+				//ID3D11RenderTargetView* RTV;
+				//ID3D11DepthStencilView* DSV;
+				//upscaler->mContext->OMGetRenderTargets(1, &RTV, &DSV);
+				//ID3D11Resource* resource;
+				//RTV->GetResource(&resource);
+				//upscaler->SetupTarget((ID3D11Texture2D*)resource);
+				//upscaler->mTargetTex.mRTV = RTV;
 			}
+
+			UnkOuterStruct::GetSingleton()->SetTAA(upscaler->mUseTAAForPeriphery);
+			ID3D11RenderTargetView* RTV;
+			ID3D11DepthStencilView* DSV;
+			upscaler->mContext->OMGetRenderTargets(1, &RTV, &DSV);
+			ID3D11Resource* resource;
+			RTV->GetResource(&resource);
+			upscaler->SetupTarget((ID3D11Texture2D*)resource);
+			upscaler->mTargetTex.mRTV = RTV;
+
 			func(param_1, param_2);
 			static ImageWrapper             SourceTex{ nullptr };
 			static ImageWrapper             TargetTex{ nullptr };
@@ -327,7 +266,7 @@ struct UpscalerHooks
 			if (TargetTex.mImage == nullptr) {
 				ID3D11RenderTargetView* RTV = nullptr;
 				ID3D11DepthStencilView* DSV = nullptr;
-				SkyrimUpscaler::GetSingleton()->mContext->OMGetRenderTargets(1, &RTV, &DSV);
+				upscaler->mContext->OMGetRenderTargets(1, &RTV, &DSV);
 				if (RTV != nullptr) {
 					ID3D11Resource* resource;
 					RTV->GetResource(&resource);
@@ -341,23 +280,32 @@ struct UpscalerHooks
 					DepthTex.mDSV = DSV;
 				}
 				ID3D11ShaderResourceView* SRV;
-				SkyrimUpscaler::GetSingleton()->mContext->PSGetShaderResources(0, 1, &SRV);
+				upscaler->mContext->PSGetShaderResources(0, 1, &SRV);
 				ID3D11Resource* resource;
 				SRV->GetResource(&resource);
 				SourceTex.mImage = (ID3D11Texture2D*)resource;
 			}
-			//if (SkyrimUpscaler::GetSingleton()->m_runtime != nullptr && !SkyrimUpscaler::GetSingleton()->mUseTAAForPeriphery) {
-			//	if (SkyrimUpscaler::GetSingleton()->m_rtv.handle == 0)
-			//		SkyrimUpscaler::GetSingleton()->m_rtv = { reinterpret_cast<uintptr_t>(SkyrimUpscaler::GetSingleton()->mTargetTex.mRTV) };
-			//	SkyrimUpscaler::GetSingleton()->m_runtime->render_effects(SkyrimUpscaler::GetSingleton()->m_runtime->get_command_queue()->get_immediate_command_list(), SkyrimUpscaler::GetSingleton()->m_rtv, SkyrimUpscaler::GetSingleton()->m_rtv);
+			//if (upscaler->m_runtime != nullptr && !upscaler->mUseTAAForPeriphery) {
+			//	if (upscaler->m_rtv.handle == 0)
+			//		upscaler->m_rtv = { reinterpret_cast<uintptr_t>(upscaler->mTargetTex.mRTV) };
+			//	upscaler->m_runtime->render_effects(upscaler->m_runtime->get_command_queue()->get_immediate_command_list(), upscaler->m_rtv, upscaler->m_rtv);
 			//}
-			if (SkyrimUpscaler::GetSingleton()->mUpscaleDepthForReShade) {
-				SkyrimUpscaler::GetSingleton()->mContext->CopyResource(SkyrimUpscaler::GetSingleton()->mDepthBuffer.mImage, DepthTex.mImage);
+			
+			if (auto r = BSGraphics::Renderer::QInstance()) {
+				auto rt = r->pRenderTargets[BSGraphics::RenderTargets::RENDER_TARGET_MOTION_VECTOR];
+				upscaler->SetupMotionVector(rt.Texture);
+				auto depthRt = r->pDepthStencils[BSGraphics::RenderTargetsDepthStencil::DEPTH_STENCIL_TARGET_MAIN];
+				if (depthRt.Texture) {
+					upscaler->SetupDepth(depthRt.Texture);
+				}
 			}
-			SkyrimUpscaler::GetSingleton()->Evaluate(TargetTex.mImage, DepthTex.mDSV);
-			SkyrimUpscaler::GetSingleton()->DelayEnable();
+			if (upscaler->mUpscaleDepthForReShade) {
+				upscaler->mContext->CopyResource(upscaler->mDepthBuffer.mImage, DepthTex.mImage);
+			}
+			upscaler->Evaluate(TargetTex.mImage, DepthTex.mDSV);
+			upscaler->DelayEnable();
 			float color[4] = { 0, 0, 0, 1 };
-			SkyrimUpscaler::GetSingleton()->mContext->ClearRenderTargetView(SourceTex.GetRTV(), color);
+			upscaler->mContext->ClearRenderTargetView(SourceTex.GetRTV(), color);
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
@@ -371,17 +319,17 @@ struct UpscalerHooks
 				ID3D11Resource*  beforeTAATex = nullptr;
 				ID3D11RenderTargetView* RTV;
 				ID3D11DepthStencilView* DSV;
-				SkyrimUpscaler::GetSingleton()->mContext->OMGetRenderTargets(1, &RTV, &DSV);
+				upscaler->mContext->OMGetRenderTargets(1, &RTV, &DSV);
 				RTV->GetResource(&beforeTAATex);
 				beforeTAAImage.mImage = (ID3D11Texture2D*)beforeTAATex;
 				beforeTAAImage.mRTV = RTV;
 			}
-			//if (SkyrimUpscaler::GetSingleton()->m_runtime != nullptr) {
-			//	if (SkyrimUpscaler::GetSingleton()->m_rtv.handle == 0)
-			//		SkyrimUpscaler::GetSingleton()->m_rtv = { reinterpret_cast<uintptr_t>(beforeTAAImage.mRTV) };
-			//	SkyrimUpscaler::GetSingleton()->m_runtime->render_effects(SkyrimUpscaler::GetSingleton()->m_runtime->get_command_queue()->get_immediate_command_list(), SkyrimUpscaler::GetSingleton()->m_rtv, SkyrimUpscaler::GetSingleton()->m_rtv);
+			//if (upscaler->m_runtime != nullptr) {
+			//	if (upscaler->m_rtv.handle == 0)
+			//		upscaler->m_rtv = { reinterpret_cast<uintptr_t>(beforeTAAImage.mRTV) };
+			//	upscaler->m_runtime->render_effects(upscaler->m_runtime->get_command_queue()->get_immediate_command_list(), upscaler->m_rtv, upscaler->m_rtv);
 			//}
-			SkyrimUpscaler::GetSingleton()->mContext->CopyResource(SkyrimUpscaler::GetSingleton()->mTempColor.mImage, beforeTAAImage.mImage);
+			upscaler->mContext->CopyResource(upscaler->mTempColor.mImage, beforeTAAImage.mImage);
 			func(a1, a2, a3);
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -392,22 +340,22 @@ struct UpscalerHooks
 		static void thunk(BSGraphics::State* a_state)
 		{
 			func(a_state);
-			if (SkyrimUpscaler::GetSingleton()->IsEnabled() && 
-				SkyrimUpscaler::GetSingleton()->mEnableJitter) {
-				if (SkyrimUpscaler::GetSingleton()->mUpscaleType != TAA) {
+			if (upscaler->IsEnabled() && 
+				upscaler->mEnableJitter) {
+				if (upscaler->mUpscaleType != TAA) {
 					float x = 0.0f;
 					float y = 0.0f;
-					SkyrimUpscaler::GetSingleton()->GetJitters(&x, &y);
-					float w = SkyrimUpscaler::GetSingleton()->mRenderSizeX;
-					float h = SkyrimUpscaler::GetSingleton()->mRenderSizeY;
+					upscaler->GetJitters(&x, &y);
+					float w = upscaler->mRenderSizeX;
+					float h = upscaler->mRenderSizeY;
 					a_state->jitter[0] = -4 * x / w;
 					a_state->jitter[1] = 2 * y / h;
-					SkyrimUpscaler::GetSingleton()->SetJitterOffsets(-x, -y);
+					upscaler->SetJitterOffsets(-x, -y);
 				}
 			} else {
 				a_state->jitter[0] = 0;
 				a_state->jitter[1] = 0;
-				SkyrimUpscaler::GetSingleton()->SetJitterOffsets(0, 0);
+				upscaler->SetJitterOffsets(0, 0);
 			}
 		}
 		static inline REL::Relocation<decltype(thunk)> func;

@@ -1,28 +1,52 @@
 {
-    "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg/master/scripts/vcpkg.schema.json",
-    "name": "commonlibsse-plugin",
-    "version-string": "1.0.0",
-    "port-version": 0,
-    "description": "SKSE plugin based on CommonLibSSE, for unified AE/SE/VR deployment.",
-    "homepage": "https://www.skyrimng.com",
-    "license": "Apache-2.0",
-    "features": {
-        "plugin": {
-            "description": "Build the SKSE plugin.",
-            "dependencies": [
-                "commonlibsse-ng",
-                "nlohmann-json",
-                "simpleini",
-                "magic-enum",
-                {
-                    "name": "imgui",
-                    "features": ["dx11-binding", "win32-binding"],
-                    "version>=": "1.88"
-                }
-            ]
-        }
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "skyrimupscalervr",
+  "license": "GPL-3.0",
+  "features": {
+    "commonlibsse-ng": {
+      "description": "Dependencies of clib-ng",
+      "dependencies": ["catch2", "fmt", "directxtk", "rapidcsv", "spdlog"]
+    }
+  },
+  "default-features": ["commonlibsse-ng"],
+  "dependencies": [
+    "rsm-binary-io",
+    "bshoshany-thread-pool",
+    "clib-util",
+    "cppwinrt",
+    "simpleini",
+    "directxtex",
+    "eastl",
+    "efsw",
+    {
+      "name": "imgui",
+      "features": ["dx11-binding", "win32-binding", "docking-experimental"]
     },
-    "default-features": [
-        "plugin"
-    ]
+    "magic-enum",
+    "nlohmann-json",
+    "pystring",
+    "tracy",
+    "unordered-dense",
+    "xbyak"
+  ],
+  "overrides": [
+    {
+      "name": "bshoshany-thread-pool",
+      "version": "3.5.0"
+    },
+    {
+      "name": "imgui",
+      "version": "1.90"
+    },
+    {
+      "name": "tracy",
+      "version": "0.11.0"
+    },
+    {
+      "name": "magic-enum",
+      "version": "0.9.6",
+      "port-version": 1
+    }
+  ],
+  "builtin-baseline": "98aa6396292d57e737a6ef999d4225ca488859d5"
 }
