@@ -54,5 +54,4 @@ target_link_libraries(
 	unordered_dense::unordered_dense
 	efsw::efsw
 	Tracy::TracyClient
-	Streamline
 )

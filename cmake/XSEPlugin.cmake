@@ -43,17 +43,6 @@ target_precompile_headers(
 
 find_path(SIMPLEINI_INCLUDE_DIRS "ConvertUTF.c")
 
-target_include_directories(
-	"${PROJECT_NAME}"
-	PUBLIC
-		${CMAKE_CURRENT_SOURCE_DIR}/include
-		${CMAKE_CURRENT_SOURCE_DIR}/extern/nvapi
-	PRIVATE
-		${CMAKE_CURRENT_BINARY_DIR}/cmake
-		${CMAKE_CURRENT_SOURCE_DIR}/src
-		${SIMPLEINI_INCLUDE_DIRS}
-)
-
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_DEBUG OFF)
 
@@ -61,7 +50,7 @@ set(Boost_USE_STATIC_LIBS ON)
 set(Boost_USE_STATIC_RUNTIME ON)
 
 if (CMAKE_GENERATOR MATCHES "Visual Studio")
-	add_compile_definitions(_UNICODE)
+	# add_compile_definitions(_UNICODE)
 
 	target_compile_definitions(${PROJECT_NAME} PRIVATE "$<$<CONFIG:DEBUG>:DEBUG>")
 
@@ -71,7 +60,6 @@ if (CMAKE_GENERATOR MATCHES "Visual Studio")
 		"${PROJECT_NAME}"
 		PRIVATE
 			/MP
-			/await
 			/W4
 			/WX-
 			/permissive-
@@ -124,24 +112,26 @@ add_subdirectory(${CommonLibPath} ${CommonLibName} EXCLUDE_FROM_ALL)
 
 find_package(spdlog CONFIG REQUIRED)
 
+
 target_include_directories(
 	${PROJECT_NAME}
 	PUBLIC
 		${CMAKE_CURRENT_SOURCE_DIR}/include
 		imgui::imgui
+		${CMAKE_CURRENT_SOURCE_DIR}/extern/nvapi
 	PRIVATE
 		${CMAKE_CURRENT_BINARY_DIR}/cmake
 		${CMAKE_CURRENT_SOURCE_DIR}/src
-		debug ${CMAKE_CURRENT_SOURCE_DIR}/extern/detours/x64/Debug/detours.lib
-		optimized ${CMAKE_CURRENT_SOURCE_DIR}/extern/detours/x64/Release/detours.lib
-		debug ${CMAKE_CURRENT_SOURCE_DIR}/extern/PDPerfPlugin.lib
-		optimized ${CMAKE_CURRENT_SOURCE_DIR}/extern/PDPerfPlugin.lib
-		debug ${CMAKE_CURRENT_SOURCE_DIR}/extern/nvapi/amd64/nvapi64.lib
-		optimized ${CMAKE_CURRENT_SOURCE_DIR}/extern/nvapi/amd64/nvapi64.lib
+		${SIMPLEINI_INCLUDE_DIRS}
 )
 
 target_link_libraries(
 	${PROJECT_NAME}
 	PUBLIC
-	CommonLibSSE::CommonLibSSE
+		CommonLibSSE::CommonLibSSE
+	PRIVATE
+		debug ${CMAKE_CURRENT_SOURCE_DIR}/extern/detours/x64/Debug/detours.lib
+		optimized ${CMAKE_CURRENT_SOURCE_DIR}/extern/detours/x64/Release/detours.lib
+		${CMAKE_CURRENT_SOURCE_DIR}/extern/PDPerfPlugin.lib
+		${CMAKE_CURRENT_SOURCE_DIR}/extern/nvapi/amd64/nvapi64.lib
 )

@@ -1,24 +1,24 @@
 #pragma once
 
+#include <Common.h>
+#include <D3D11VariableRateShading.h>
 #include <PCH.h>
 #include <PDPerfPlugin/PDPerfPlugin.h>
 #include <RE/BSGraphics.h>
+#include <SettingGUI.h>
 #include <SimpleIni.h>
 #include <d3d11_4.h>
-#include <SettingGUI.h>
-#include <Common.h>
-#include <D3D11VariableRateShading.h>
 
 struct UnkOuterStruct
 {
 	struct UnkInnerStruct
 	{
 		uint8_t unk00[24];  // 00
-		bool    bTAA;         // 0x18
+		bool    bTAA;       // 0x18
 	};
 
 	// members
-	uint8_t         unk00[536];    // 00
+	uint8_t         unk00[536];      // 00
 	UnkInnerStruct* unkInnerStruct;  // 0x218
 
 	static UnkOuterStruct* GetSingleton()
@@ -46,7 +46,7 @@ class SkyrimUpscaler
 {
 public:
 	bool  mEnableUpscaler = false;
-	float mJitterIndex{0};
+	float mJitterIndex{ 0 };
 	float mJitterOffsets[2];
 	float mMotionScale[2]{ 0, 0 };
 	bool  mSharpening{ false };
@@ -95,6 +95,10 @@ public:
 
 	bool mDebugOverlay{ false };
 
+	int mDelayInit{ -1 };
+
+	INT64 mFrameIndex = 0;
+
 	int mToggleUpscaler{ ImGuiKey_KeypadMultiply };
 
 	ImageWrapper mTargetTex;
@@ -104,7 +108,6 @@ public:
 	ImageWrapper mTempDepth;
 	ImageWrapper mMotionVectors;
 	ImageWrapper mOpaqueColor;
-	ImageWrapper mOpaqueColorHDR;
 	ImageWrapper mTransparentMask;
 
 	// For VR Fixed Foveated DLSS
@@ -122,7 +125,7 @@ public:
 	ImageWrapper mOutColorRect[2];
 
 	ID3D11VertexShader*    mVertexShader{ nullptr };
-	ID3D11PixelShader*     mPixelShader[4]{ nullptr, nullptr, nullptr, nullptr };
+	ID3D11PixelShader*     mPixelShader[5]{ nullptr, nullptr, nullptr, nullptr, nullptr };
 	ID3D11SamplerState*    mSampler{ nullptr };
 	ID3D11RasterizerState* mRasterizerState{ nullptr };
 	ID3D11BlendState*      mBlendState{ nullptr };
@@ -156,8 +159,6 @@ public:
 
 	float GetVerticalFOVRad();
 	void  Evaluate(ID3D11Resource* destTex, ID3D11DepthStencilView* dsv);
-	UpscaleParams GetUpscaleParams(int id, void* color, void* motionVector, void* depth, void* mask, void* destination, int renderSizeX, int renderSizeY, float sharpness,
-		float jitterOffsetX, float jitterOffsetY, int motionScaleX, int motionScaleY, bool reset, float nearPlane, float farPlane, float verticalFOV, bool execute = true);
 
 	bool IsEnabled();
 	void DelayEnable();
@@ -171,7 +172,6 @@ public:
 	void SetupDepth(ID3D11Texture2D* depth_buffer);
 	void SetupMotionVector(ID3D11Texture2D* motion_buffer);
 	void SetupOpaqueColor(ID3D11Texture2D* opaque_buffer);
-	void SetupOpaqueColorHDR(ID3D11Texture2D* opaque_buffer_hdr);
 	void SetupTransparentMask(ID3D11Texture2D* transparent_buffer);
 	void SetMotionScale(float x, float y);
 	void SetEnabled(bool enabled);
@@ -181,6 +181,7 @@ public:
 	bool InFoveatedRect(float x, float y);
 	void InitShader();
 	void RenderTexture(int pixelShaderIndex, int numViews, ID3D11ShaderResourceView** inputSRV, ID3D11DepthStencilView* inputDSV, ID3D11RenderTargetView* target, int width, int height, int topLeftX = 0, int topLeftY = 0);
+	void UpscaleUIDepth(int pixelShaderIndex, int numViews, ID3D11ShaderResourceView** inputSRV, ID3D11DepthStencilView* inputDSV);
 };
 
 void InstallUpscalerHooks();

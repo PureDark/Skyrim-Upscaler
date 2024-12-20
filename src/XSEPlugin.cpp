@@ -83,26 +83,28 @@ EXTERN_C [[maybe_unused]] __declspec(dllexport) bool SKSEAPI SKSEPlugin_Load(con
 #endif
 
 	InitializeLog();
-	int handle = (int)LoadLibrary(GetLibraryPath("nvngx_dlss.dll").c_str());
-	logger::info("Loaded plugin nvngx_dlss.dll {}", handle);
-	handle = (int)LoadLibrary(GetLibraryPath("ffx_fsr2_api_x64.dll").c_str());
-	logger::info("Loaded plugin ffx_fsr2_api_x64.dll {}", handle);
-	handle = (int)LoadLibrary(GetLibraryPath("ffx_fsr2_api_dx12_x64.dll").c_str());
-	logger::info("Loaded plugin ffx_fsr2_api_dx12_x64.dll {}", handle);
-	handle = (int)LoadLibrary(GetLibraryPath("ffx_fsr2_api_vk_x64.dll").c_str());
-	logger::info("Loaded plugin ffx_fsr2_api_vk_x64.dll {}", handle);
-	handle = (int)LoadLibrary(GetLibraryPath("dxil.dll").c_str());
-	logger::info("Loaded plugin dxil.dll {}", handle);
-	handle = (int)LoadLibrary(GetLibraryPath("dxcompiler.dll").c_str());
-	logger::info("Loaded plugin dxcompiler.dll {}", handle);
-	handle = (int)LoadLibrary(GetLibraryPath("XeFX_Loader.dll").c_str());
-	logger::info("Loaded plugin XeFX_Loader.dll {}", handle);
-	handle = (int)LoadLibrary(GetLibraryPath("XeFX.dll").c_str());
-	logger::info("Loaded plugin XeFX.dll {}", handle);
-	handle = (int)LoadLibrary(GetLibraryPath("libxess.dll").c_str());
-	logger::info("Loaded plugin libxess.dll {}", handle);
-	handle = (int)LoadLibrary(GetLibraryPath("PDPerfPlugin.dll").c_str());
-	logger::info("Loaded plugin PDPerfPlugin.dll {}", handle);
+	auto handle = LoadLibrary(GetLibraryPath("nvngx_dlss.dll"s).c_str());
+	logger::info("Loaded plugin nvngx_dlss.dll {}", (void*)handle);
+
+#ifndef NDEBUG
+	handle = LoadLibrary(GetLibraryPath("ffx_backend_dx11_x64d.dll").c_str());
+	spdlog::info("Loaded plugin ffx_backend_dx11_x64d.dll {}", (void*)handle);
+	handle = LoadLibrary(GetLibraryPath("ffx_fsr3upscaler_x64d.dll").c_str());
+	spdlog::info("Loaded plugin ffx_fsr3upscaler_x64d.dll {}", (void*)handle);
+	handle = LoadLibrary(GetLibraryPath("ffx_fsr3_x64d.dll").c_str());
+	spdlog::info("Loaded plugin ffx_fsr3_x64d.dll {}", (void*)handle);
+#else
+	handle = LoadLibrary(GetLibraryPath("ffx_backend_dx11_x64.dll").c_str());
+	spdlog::info("Loaded plugin ffx_backend_dx11_x64.dll {}", (void*)handle);
+	handle = LoadLibrary(GetLibraryPath("ffx_fsr3upscaler_x64.dll").c_str());
+	spdlog::info("Loaded plugin ffx_fsr3upscaler_x64.dll {}", (void*)handle);
+	handle = LoadLibrary(GetLibraryPath("ffx_fsr3_x64.dll").c_str());
+	spdlog::info("Loaded plugin ffx_fsr3_x64.dll {}", (void*)handle);
+#endif
+	handle = LoadLibrary(GetLibraryPath("libxess.dll").c_str());
+	logger::info("Loaded plugin libxess.dll {}", (void*)handle);
+	handle = LoadLibrary(GetLibraryPath("PDPerfPlugin.dll").c_str());
+	logger::info("Loaded plugin PDPerfPlugin.dll {}", (void*)handle);
 
 	logger::info("Loaded all plugins");
 
@@ -113,16 +115,16 @@ EXTERN_C [[maybe_unused]] __declspec(dllexport) bool SKSEAPI SKSEPlugin_Load(con
 	return true;
 }
 
-EXTERN_C [[maybe_unused]] __declspec(dllexport) constinit auto SKSEPlugin_Version = []() noexcept {
+extern "C" DLLEXPORT constinit auto SKSEPlugin_Version = []() noexcept {
 	SKSE::PluginVersionData v;
-	v.PluginName(Plugin::NAME);
+	v.PluginName(Plugin::NAME.data());
 	v.PluginVersion(Plugin::VERSION);
-	v.UsesAddressLibrary(true);
-	v.HasNoStructUse(true);
+	v.UsesAddressLibrary();
+	v.UsesNoStructs();
 	return v;
 }();
 
-EXTERN_C [[maybe_unused]] __declspec(dllexport) bool SKSEAPI SKSEPlugin_Query(const SKSE::QueryInterface*, SKSE::PluginInfo* pluginInfo)
+extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Query(const SKSE::QueryInterface*, SKSE::PluginInfo* pluginInfo)
 {
 	pluginInfo->name = SKSEPlugin_Version.pluginName;
 	pluginInfo->infoVersion = SKSE::PluginInfo::kVersion;

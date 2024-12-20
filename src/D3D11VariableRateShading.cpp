@@ -128,10 +128,10 @@ std::vector<uint8_t> D3D11VariableRateShading::CreateCombinedFixedFoveatedVRSPat
 			data[(y * width + x) * 4 + 2] = 255;
 			data[(y * width + x) * 4 + 3] = 255;
 		}
-		data[(y * width + renderWidth) * 4] = 0;
-		data[(y * width + renderWidth) * 4 + 1] = 0;
-		data[(y * width + renderWidth) * 4 + 2] = 0;
-		data[(y * width + renderWidth) * 4 + 3] = 255;
+		data[(y * width + renderWidth - 1 ) * 4] = 0;
+		data[(y * width + renderWidth - 1) * 4 + 1] = 0;
+		data[(y * width + renderWidth - 1) * 4 + 2] = 0;
+		data[(y * width + renderWidth - 1) * 4 + 3] = 255;
 	}
 	for (int y = renderHeight; y < height; ++y) {
 		for (int x = 0; x < width; ++x) {
@@ -210,7 +210,19 @@ void D3D11VariableRateShading::PostOMSetRenderTargets(UINT numViews, ID3D11Rende
 
 	ID3D11Resource* resource;
 	renderTargetViews[0]->GetResource(&resource);
-	auto opaqueColor = SkyrimUpscaler::GetSingleton()->mUseHDRBuffer ? SkyrimUpscaler::GetSingleton()->mOpaqueColorHDR.mImage : SkyrimUpscaler::GetSingleton()->mOpaqueColor.mImage;
+	auto opaqueColor = SkyrimUpscaler::GetSingleton()->mOpaqueColor.mImage;
+
+	//static std::map<ID3D11Resource*, int> counts;
+	//static int                            lastFrameIndex = 0;
+	//if (lastFrameIndex != SkyrimUpscaler::GetSingleton()->mFrameIndex) {
+	//	lastFrameIndex = SkyrimUpscaler::GetSingleton()->mFrameIndex;
+	//	for (auto item : counts) {
+	//		logger::info("{} {:p} {}", lastFrameIndex, (void*)item.first, item.second);
+	//	}
+	//	counts.clear();
+	//}
+	//counts[resource]++;
+
 	if (resource != opaqueColor) {
 		DisableVRS();
 		return;

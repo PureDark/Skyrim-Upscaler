@@ -20,15 +20,6 @@ using namespace reshade::api;
 const float Deg2Rad = 0.0174532924f;
 const float Rad2Deg = 57.29578f;
 
-enum UpscaleType
-{
-	DLSS,
-	FSR2,
-	XESS,
-	DLAA,
-	TAA
-};
-
 struct CustomConstants
 {
 	float jitterOffset[2];

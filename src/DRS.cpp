@@ -95,10 +95,10 @@ RE::BSEventNotifyControl MenuOpenCloseEventHandler::ProcessEvent(const RE::MenuO
 			if (SkyrimUpscaler::GetSingleton()->mENBEyeAdaptionFix) {
 				switch (SkyrimUpscaler::GetSingleton()->mUpscaleType) {
 				case DLSS:
-					SkyrimUpscaler::GetSingleton()->mOriginalValue = SkyrimUpscaler::GetSingleton()->mUpscaleType;
+					SkyrimUpscaler::GetSingleton()->mOriginalValue = SkyrimUpscaler::GetSingleton()->mQualityLevel;
 					SkyrimUpscaler::GetSingleton()->mOriginalRenderSizeX = SkyrimUpscaler::GetSingleton()->mRenderSizeX;
 					SkyrimUpscaler::GetSingleton()->mOriginalRenderSizeY = SkyrimUpscaler::GetSingleton()->mRenderSizeY;
-					SkyrimUpscaler::GetSingleton()->mUpscaleType = DLAA;
+					SkyrimUpscaler::GetSingleton()->mQualityLevel = Native;
 					break;
 				case FSR2:
 				case XESS:
@@ -106,7 +106,7 @@ RE::BSEventNotifyControl MenuOpenCloseEventHandler::ProcessEvent(const RE::MenuO
 					//SkyrimUpscaler::GetSingleton()->mQualityLevel = 4;
 					break;
 				}
-				SkyrimUpscaler::GetSingleton()->mUpscaleType = DLAA;
+				SkyrimUpscaler::GetSingleton()->mQualityLevel = Native;
 				SkyrimUpscaler::GetSingleton()->InitUpscaler(true);
 			}
 			UnkOuterStruct::GetSingleton()->SetTAA(false);

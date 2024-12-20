@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Detours.h>
+#include <detours/Detours.h>
 #include "RE/BSGraphics.h"
 #include <PCH.h>
 #include <ENB/ENBSeriesAPI.h>

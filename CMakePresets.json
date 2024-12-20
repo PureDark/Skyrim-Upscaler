@@ -6,7 +6,7 @@
 			"cacheVariables": {
 				"SKSE_SUPPORT_XBYAK": "ON"
 			},
-			"binaryDir": "${sourceDir}/build/${presetName}"
+			"binaryDir": "${sourceDir}/build"
 		},
 		{
 			"name": "vcpkg",

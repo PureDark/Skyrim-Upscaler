@@ -2,11 +2,9 @@
 #include <d3d11.h>
 #include <dxgi.h>
 
-#include <Detours.h>
+#include <detours/Detours.h>
 #include "SkyrimUpscaler.h"
 #include "SettingGUI.h"
-
-#include <Detours.h>
 #include "DRS.h"
 
 using namespace BSGraphics;
@@ -22,7 +20,7 @@ static int                                                          index;
 
 decltype(&D3D11CreateDeviceAndSwapChain)      ptrD3D11CreateDeviceAndSwapChain;
 decltype(&IDXGISwapChain::Present)            ptrPresent;
-//decltype(&ID3D11Device::CreateTexture2D)      ptrCreateTexture2D;
+decltype(&ID3D11Device::CreateTexture2D)      ptrCreateTexture2D;
 decltype(&ID3D11DeviceContext::PSSetSamplers) ptrPSSetSamplers;
 decltype(&ID3D11DeviceContext::VSSetSamplers) ptrVSSetSamplers;
 decltype(&ID3D11DeviceContext::GSSetSamplers) ptrGSSetSamplers;
@@ -62,16 +60,24 @@ HRESULT WINAPI hk_IDXGISwapChain_Present(IDXGISwapChain* This, UINT SyncInterval
 	auto hr = (This->*ptrPresent)(SyncInterval, Flags);
 	DRS::GetSingleton()->Update();
 
+	upscaler->mFrameIndex++;
 	
-	if (auto r = BSGraphics::Renderer::QInstance()) {
-		for (int i = 0; i < RENDER_TARGET_COUNT; i++) {
-			auto rt = r->pRenderTargets[i];
-			if (rt.Texture != NULL && (rt.Texture == upscaler->mOpaqueColor.mImage || rt.Texture == upscaler->mOpaqueColorHDR.mImage)) {
-				bool a = true;
-			}
-			if (rt.TextureCopy != NULL && (rt.TextureCopy == upscaler->mOpaqueColor.mImage || rt.TextureCopy == upscaler->mOpaqueColorHDR.mImage)) {
-				bool b = true;
-			}
+	
+	static auto renderer = RE::BSGraphics::Renderer::GetSingleton();
+	if (renderer) {
+		auto  runtimeData = renderer->GetRuntimeData();
+		auto& motionVectorsTexture = runtimeData.renderTargets[RE::RENDER_TARGET::kMOTION_VECTOR];
+		if (motionVectorsTexture.texture) {
+			upscaler->SetupMotionVector(motionVectorsTexture.texture);
+		}
+		auto  depthStencilData = renderer->GetDepthStencilData();
+		auto& depthTexture = depthStencilData.depthStencils[RE::RENDER_TARGETS_DEPTHSTENCIL::kMAIN];
+		if (depthTexture.texture) {
+			upscaler->SetupDepth(depthTexture.texture);
+		}
+		auto& OpaqueColor = runtimeData.renderTargets[RE::RENDER_TARGET::kMAIN];
+		if (OpaqueColor.texture) {
+			upscaler->SetupOpaqueColor(OpaqueColor.texture);
 		}
 	}
 	return hr;
@@ -176,12 +182,16 @@ HRESULT WINAPI hk_D3D11CreateDeviceAndSwapChain(
 	sDesc.BufferDesc.Width = 1024;
 	sDesc.BufferDesc.Height = 1024;
 
+	D3D_FEATURE_LEVEL featureLevel = D3D_FEATURE_LEVEL_11_1;
+	FeatureLevels = 1;
+	logger::info("Changing feature level to D3D_FEATURE_LEVEL_11_1");
+
 	logger::info("Calling original D3D11CreateDeviceAndSwapChain");
 	HRESULT hr = (*ptrD3D11CreateDeviceAndSwapChain)(pAdapter,
 		DriverType,
 		Software,
 		Flags,
-		pFeatureLevels,
+		&featureLevel,
 		FeatureLevels,
 		SDKVersion,
 		&sDesc,
@@ -217,6 +227,33 @@ HRESULT WINAPI hk_D3D11CreateDeviceAndSwapChain(
 
 struct UpscalerHooks
 {
+	struct UpscaleDepthBuffer
+	{
+		static void thunk(__int64 a1, unsigned int a2, unsigned int a3, unsigned int a4, __int64 a5, char a6)
+		{
+			func(a1, a2, a3, a4, a5, a6);
+			static auto renderer = RE::BSGraphics::Renderer::GetSingleton();
+			if (renderer) {
+				auto  depthStencilData = renderer->GetDepthStencilData();
+				auto& depth = depthStencilData.depthStencils[RE::RENDER_TARGETS_DEPTHSTENCIL::kMAIN];
+				auto& uiDepth = depthStencilData.depthStencils[RE::RENDER_TARGETS_DEPTHSTENCIL::kMAIN_COPY];
+				if (uiDepth.texture) {
+					auto srv = depth.depthSRV;
+					auto dsv = uiDepth.views;
+					upscaler->UpscaleUIDepth(4, 1, &srv, dsv[0]);
+					if (upscaler->mDebug3) {
+						upscaler->mContext->ClearDepthStencilView(dsv[0], D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 0, 0);
+					}
+					if (upscaler->mDebug4) {
+						static ImageWrapper uiDepthWrapper;
+						uiDepthWrapper.mImage = uiDepth.texture;
+						upscaler->mContext->ClearDepthStencilView(uiDepthWrapper.GetDSV(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 0, 0);
+					}
+				}
+			}
+		}
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
 
 	struct BSGraphics_Renderer_Init_InitD3D
 	{
@@ -225,9 +262,19 @@ struct UpscalerHooks
 			func();
 			MenuOpenCloseEventHandler::Register();
 
-			static auto  renderer = RE::BSGraphics::Renderer::GetSingleton();
-			static auto& depthTexture = renderer->GetDepthStencilData().depthStencils[RE::RENDER_TARGETS_DEPTHSTENCIL::kPOST_ZPREPASS_COPY];
-			static auto& motionVectorsTexture = renderer->GetRuntimeData().renderTargets[RE::RENDER_TARGET::kMOTION_VECTOR];
+			auto renderer = RE::BSGraphics::Renderer::GetSingleton();
+			if (renderer) {
+				auto  runtimeData = renderer->GetRuntimeData();
+				auto& motionVectorsTexture = runtimeData.renderTargets[RE::RENDER_TARGET::kMOTION_VECTOR];
+				if (motionVectorsTexture.texture) {
+					upscaler->SetupMotionVector(motionVectorsTexture.texture);
+				}
+				auto  depthStencilData = renderer->GetDepthStencilData();
+				auto& depthTexture = depthStencilData.depthStencils[RE::RENDER_TARGETS_DEPTHSTENCIL::kMAIN];
+				if (depthTexture.texture) {
+					upscaler->SetupDepth(depthTexture.texture);
+				}
+			}
 			upscaler->InitUpscaler();
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -290,15 +337,6 @@ struct UpscalerHooks
 			//		upscaler->m_rtv = { reinterpret_cast<uintptr_t>(upscaler->mTargetTex.mRTV) };
 			//	upscaler->m_runtime->render_effects(upscaler->m_runtime->get_command_queue()->get_immediate_command_list(), upscaler->m_rtv, upscaler->m_rtv);
 			//}
-			
-			if (auto r = BSGraphics::Renderer::QInstance()) {
-				auto rt = r->pRenderTargets[BSGraphics::RenderTargets::RENDER_TARGET_MOTION_VECTOR];
-				upscaler->SetupMotionVector(rt.Texture);
-				auto depthRt = r->pDepthStencils[BSGraphics::RenderTargetsDepthStencil::DEPTH_STENCIL_TARGET_MAIN];
-				if (depthRt.Texture) {
-					upscaler->SetupDepth(depthRt.Texture);
-				}
-			}
 			if (upscaler->mUpscaleDepthForReShade) {
 				upscaler->mContext->CopyResource(upscaler->mDepthBuffer.mImage, DepthTex.mImage);
 			}
@@ -368,11 +406,15 @@ struct UpscalerHooks
 			// Nope, depth and motion texture are already created after this function, so can't use it
 			stl::write_thunk_call<BSGraphics_Renderer_Init_InitD3D>(REL::RelocationID(75595, 77226).address() + REL::Relocate(0x50, 0x2BC));
 			// Have to hook the creation of SwapChain to hook CreateTexture2D before depth and motion textures are created
-			char* ptr = nullptr;
-			auto  moduleBase = (uintptr_t)GetModuleHandle(ptr);
+			auto  moduleBase = (uintptr_t)GetModuleHandle(nullptr);
 			auto  dllD3D11 = GetModuleHandleA("d3d11.dll");
 			//*(FARPROC*)&ptrD3D11CreateDeviceAndSwapChain = GetProcAddress(dllD3D11, "D3D11CreateDeviceAndSwapChain");
 			*(void**)&ptrD3D11CreateDeviceAndSwapChain = (uintptr_t*)Detours::IATHook(moduleBase, "d3d11.dll", "D3D11CreateDeviceAndSwapChain", (uintptr_t)hk_D3D11CreateDeviceAndSwapChain);
+			//stl::write_thunk_call<D3D11CreateDeviceAndSwapChain_Hook>((moduleBase + 0xDC47C5));  // D718D0 (D71BB3), 1606E00 (16070C0), D718D0 (DC47C5)
+			
+			stl::write_thunk_call<UpscaleDepthBuffer>((moduleBase + 0x13246AE));
+
+
 
 			// Setup our own jitters
 			stl::write_thunk_call<BSGraphics_Renderer_Begin_UpdateJitter>(REL::RelocationID(75460, 77245).address() + REL::Relocate(0xE5, 0xE2, 0x104));  // D6A0C0 (D6A1A5), DA5A00 (DA5AE2)
