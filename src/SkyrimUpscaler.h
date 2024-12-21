@@ -98,6 +98,9 @@ public:
 	int mDelayInit{ -1 };
 
 	INT64 mFrameIndex = 0;
+	INT64 mDOFFoggedLastFrameIndex{ 0 };
+	INT64 mTAALastFrameIndex{ 0 };
+	INT64 mDelayToggleTAAStart{ 0 };
 
 	int mToggleUpscaler{ ImGuiKey_KeypadMultiply };
 

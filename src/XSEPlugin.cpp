@@ -108,6 +108,14 @@ EXTERN_C [[maybe_unused]] __declspec(dllexport) bool SKSEAPI SKSEPlugin_Load(con
 
 	logger::info("Loaded all plugins");
 
+	static INT64 startTime = MillisecondsNow();
+	while (MillisecondsNow() - startTime <= 3 * 1000) {
+	};
+
+#ifdef _RENDERDOC
+	LoadLibrary("renderdoc.dll");
+#endif
+
 	SKSE::Init(a_skse);
 
 	Init();
@@ -159,6 +167,9 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID)
 {
 	switch (fdwReason) {
 	case DLL_PROCESS_ATTACH:
+#ifdef _RENDERDOC
+
+#endif
 		//ReShadeInstalled = true;
 		//if (!reshade::register_addon(hModule)) {
 		//	ReShadeInstalled = false;

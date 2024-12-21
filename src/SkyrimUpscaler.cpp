@@ -223,8 +223,9 @@ void SkyrimUpscaler::Evaluate(ID3D11Resource* destTex, ID3D11DepthStencilView* d
 		if (mTargetTex.mImage != nullptr && mDepthBuffer.mImage != nullptr && mMotionVectors.mImage != nullptr) {
 			if ((IsEnabled() && !DRS::GetSingleton()->reset) && (mUpscaleType != TAA)) {
 				if (!mDisableEvaluation) {
+					bool          useTAAColor = mUseTAAForPeriphery && mTAALastFrameIndex == mFrameIndex && mDOFFoggedLastFrameIndex != mFrameIndex;
 					float         verticalFOV = mFOV * (float(mDisplaySizeY) / mDisplaySizeX) * 0.01745329252f;
-					auto          targetTex = mUseTAAForPeriphery ? mTempColor.mImage : mTargetTex.mImage;
+					auto          targetTex = useTAAColor ? mTempColor.mImage : mTargetTex.mImage;
 					auto          transparentMask = mEnableTransparencyMask ? mTransparentMask.mImage : nullptr;
 					auto          depthTex = mDepthBuffer.mImage;
 					if (mUpscaleType == FSR2 || mUpscaleType == XESS) {
@@ -296,6 +297,10 @@ void SkyrimUpscaler::Evaluate(ID3D11Resource* destTex, ID3D11DepthStencilView* d
 				}
 			}
 		}
+	}
+
+	if (mDelayToggleTAAStart < 0 && mUseTAAForPeriphery && mTAALastFrameIndex != mFrameIndex) {
+		mDelayToggleTAAStart = MillisecondsNow();
 	}
 }
 

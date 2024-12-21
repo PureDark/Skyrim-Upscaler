@@ -113,8 +113,10 @@ RE::BSEventNotifyControl MenuOpenCloseEventHandler::ProcessEvent(const RE::MenuO
 			SkyrimUpscaler::GetSingleton()->mNeedUpdate = true;
 		} else {
 			DRS::GetSingleton()->isInLoadingMenu = false;
-			if (SkyrimUpscaler::GetSingleton()->mDelayEnable)
+			if (SkyrimUpscaler::GetSingleton()->mDelayEnable) {
 				SkyrimUpscaler::GetSingleton()->mEnableDelayCount = 150;
+				//SkyrimUpscaler::GetSingleton()->mDelayToggleTAAStart = MillisecondsNow();
+			}
 		}
 	}
 	if (a_event->menuName == RE::MainMenu::MENU_NAME ||

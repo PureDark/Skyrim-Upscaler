@@ -227,6 +227,74 @@ HRESULT WINAPI hk_D3D11CreateDeviceAndSwapChain(
 
 struct UpscalerHooks
 {
+#ifdef _RENDERDOC
+	struct D3D11CreateDeviceAndSwapChain_Hook
+	{
+		static HRESULT thunk(
+			IDXGIAdapter*               pAdapter,
+			D3D_DRIVER_TYPE             DriverType,
+			HMODULE                     Software,
+			UINT                        Flags,
+			const D3D_FEATURE_LEVEL*    pFeatureLevels,
+			UINT                        FeatureLevels,
+			UINT                        SDKVersion,
+			const DXGI_SWAP_CHAIN_DESC* pSwapChainDesc,
+			IDXGISwapChain**            ppSwapChain,
+			ID3D11Device**              ppDevice,
+			D3D_FEATURE_LEVEL*          pFeatureLevel,
+			ID3D11DeviceContext**       ppImmediateContext)
+		{
+			DXGI_SWAP_CHAIN_DESC sDesc;
+			memcpy(&sDesc, pSwapChainDesc, sizeof(DXGI_SWAP_CHAIN_DESC));
+			sDesc.BufferDesc.Width = 1024;
+			sDesc.BufferDesc.Height = 1024;
+
+			D3D_FEATURE_LEVEL featureLevel = D3D_FEATURE_LEVEL_11_1;
+			FeatureLevels = 1;
+			logger::info("Changing feature level to D3D_FEATURE_LEVEL_11_1");
+
+			logger::info("Calling original D3D11CreateDeviceAndSwapChain");
+			HRESULT hr = func(pAdapter,
+				DriverType,
+				Software,
+				Flags,
+				&featureLevel,
+				FeatureLevels,
+				SDKVersion,
+				pSwapChainDesc,
+				ppSwapChain,
+				ppDevice,
+				pFeatureLevel,
+				ppImmediateContext);
+
+			auto             device = *ppDevice;
+			auto             deviceContext = *ppImmediateContext;
+			auto             swapChain = *ppSwapChain;
+			IDXGISwapChain2* unwrappedSwapChain;
+			swapChain->QueryInterface(IID_PPV_ARGS(&unwrappedSwapChain));
+			upscaler->SetupSwapChain(unwrappedSwapChain);
+			upscaler->PreInit();
+			SettingGUI::GetSingleton()->InitIMGUI(swapChain, device, deviceContext);
+			InitLogDelegate(MyLog);
+			logger::info("Detouring virtual function tables");
+			*(uintptr_t*)&ptrPresent = Detours::X64::DetourClassVTable(*(uintptr_t*)swapChain, &hk_IDXGISwapChain_Present, 8);
+			//*(uintptr_t*)&ptrCreateTexture2D = Detours::X64::DetourClassVTable(*(uintptr_t*)device, &hk_ID3D11Device_CreateTexture2D, 5);
+			*(uintptr_t*)&ptrPSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_PSSetSamplers, 10);
+			*(uintptr_t*)&ptrVSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_VSSetSamplers, 26);
+			*(uintptr_t*)&ptrGSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_GSSetSamplers, 32);
+			*(uintptr_t*)&ptrHSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_HSSetSamplers, 61);
+			*(uintptr_t*)&ptrDSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_DSSetSamplers, 65);
+			*(uintptr_t*)&ptrCSSetSamplers = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_CSSetSamplers, 70);
+
+			*(uintptr_t*)&ptrOMSetRenderTargets = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_OMSetRenderTargets, 33);
+			*(uintptr_t*)&ptrOMSetRenderTargetsAndUnorderedAccessViews = Detours::X64::DetourClassVTable(*(uintptr_t*)deviceContext, &hk_ID3D11DeviceContext_OMSetRenderTargetsAndUnorderedAccessViews, 34);
+
+			return hr;
+		}
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+#endif
+	
 	struct UpscaleDepthBuffer
 	{
 		static void thunk(__int64 a1, unsigned int a2, unsigned int a3, unsigned int a4, __int64 a5, char a6)
@@ -238,20 +306,43 @@ struct UpscalerHooks
 				auto& depth = depthStencilData.depthStencils[RE::RENDER_TARGETS_DEPTHSTENCIL::kMAIN];
 				auto& uiDepth = depthStencilData.depthStencils[RE::RENDER_TARGETS_DEPTHSTENCIL::kMAIN_COPY];
 				if (uiDepth.texture) {
-					auto srv = depth.depthSRV;
-					auto dsv = uiDepth.views;
-					upscaler->UpscaleUIDepth(4, 1, &srv, dsv[0]);
-					if (upscaler->mDebug3) {
-						upscaler->mContext->ClearDepthStencilView(dsv[0], D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 0, 0);
-					}
-					if (upscaler->mDebug4) {
-						static ImageWrapper uiDepthWrapper;
-						uiDepthWrapper.mImage = uiDepth.texture;
-						upscaler->mContext->ClearDepthStencilView(uiDepthWrapper.GetDSV(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 0, 0);
-					}
+					upscaler->mContext->ClearDepthStencilView(uiDepth.views[0], D3D11_CLEAR_STENCIL, 0, 0);
+					upscaler->mContext->ClearDepthStencilView(depth.views[0], D3D11_CLEAR_STENCIL, 0, 0);
 				}
 			}
 		}
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct UIComposition
+	{
+		static __int64 thunk(__int64 a1, __int64 a2, unsigned int a3)
+		{
+			static auto renderer = RE::BSGraphics::Renderer::GetSingleton();
+			if (renderer) {
+				auto  depthStencilData = renderer->GetDepthStencilData();
+				auto& depth = depthStencilData.depthStencils[RE::RENDER_TARGETS_DEPTHSTENCIL::kMAIN];
+				auto& uiDepth = depthStencilData.depthStencils[RE::RENDER_TARGETS_DEPTHSTENCIL::kMAIN_COPY];
+				if (uiDepth.texture) {
+					upscaler->UpscaleUIDepth(4, 1, &depth.depthSRV, uiDepth.views[0]);
+				}
+				auto result = func(a1, a2, a3);
+				upscaler->mContext->CopyResource(uiDepth.texture, depth.texture);
+				return result;
+			}
+			return func(a1, a2, a3);
+		}
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct BSImagespaceShader_Render_ISDepthOfFieldFogged
+	{
+		static void thunk(void* imageSpaceShader, RE::BSTriShape* shape, RE::ImageSpaceEffectParam* param)
+		{
+			func(imageSpaceShader, shape, param);
+			upscaler->mDOFFoggedLastFrameIndex = upscaler->mFrameIndex;
+		}
+
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
@@ -284,20 +375,21 @@ struct UpscalerHooks
 	{
 		static void thunk(RE::BSImagespaceShader* param_1, uint64_t param_2)
 		{
+			if (upscaler->mDelayToggleTAAStart > 0) {
+				double currentTime = MillisecondsNow();
+				double deltaTime = (currentTime - upscaler->mDelayToggleTAAStart);
+				if (deltaTime >= 2 * 1000) {
+					upscaler->mNeedUpdate = true;
+				}
+			}
+
 			if (upscaler->mNeedUpdate || 
 				upscaler->mTargetTex.mImage == nullptr) {
 				upscaler->mNeedUpdate = false;
-				//UnkOuterStruct::GetSingleton()->SetTAA(upscaler->mUseTAAForPeriphery);
-				//ID3D11RenderTargetView* RTV;
-				//ID3D11DepthStencilView* DSV;
-				//upscaler->mContext->OMGetRenderTargets(1, &RTV, &DSV);
-				//ID3D11Resource* resource;
-				//RTV->GetResource(&resource);
-				//upscaler->SetupTarget((ID3D11Texture2D*)resource);
-				//upscaler->mTargetTex.mRTV = RTV;
+				UnkOuterStruct::GetSingleton()->SetTAA(upscaler->mUseTAAForPeriphery);
 			}
 
-			UnkOuterStruct::GetSingleton()->SetTAA(upscaler->mUseTAAForPeriphery);
+			//UnkOuterStruct::GetSingleton()->SetTAA(upscaler->mUseTAAForPeriphery);
 			ID3D11RenderTargetView* RTV;
 			ID3D11DepthStencilView* DSV;
 			upscaler->mContext->OMGetRenderTargets(1, &RTV, &DSV);
@@ -368,6 +460,7 @@ struct UpscalerHooks
 			//	upscaler->m_runtime->render_effects(upscaler->m_runtime->get_command_queue()->get_immediate_command_list(), upscaler->m_rtv, upscaler->m_rtv);
 			//}
 			upscaler->mContext->CopyResource(upscaler->mTempColor.mImage, beforeTAAImage.mImage);
+			upscaler->mTAALastFrameIndex = upscaler->mFrameIndex;
 			func(a1, a2, a3);
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -408,12 +501,18 @@ struct UpscalerHooks
 			// Have to hook the creation of SwapChain to hook CreateTexture2D before depth and motion textures are created
 			auto  moduleBase = (uintptr_t)GetModuleHandle(nullptr);
 			auto  dllD3D11 = GetModuleHandleA("d3d11.dll");
+
+#ifdef _RENDERDOC
+			stl::write_thunk_call<D3D11CreateDeviceAndSwapChain_Hook>((moduleBase + 0xDC47C5));
+#else
 			//*(FARPROC*)&ptrD3D11CreateDeviceAndSwapChain = GetProcAddress(dllD3D11, "D3D11CreateDeviceAndSwapChain");
 			*(void**)&ptrD3D11CreateDeviceAndSwapChain = (uintptr_t*)Detours::IATHook(moduleBase, "d3d11.dll", "D3D11CreateDeviceAndSwapChain", (uintptr_t)hk_D3D11CreateDeviceAndSwapChain);
-			//stl::write_thunk_call<D3D11CreateDeviceAndSwapChain_Hook>((moduleBase + 0xDC47C5));  // D718D0 (D71BB3), 1606E00 (16070C0), D718D0 (DC47C5)
+#endif
 			
 			stl::write_thunk_call<UpscaleDepthBuffer>((moduleBase + 0x13246AE));
+			stl::write_thunk_call<UIComposition>((moduleBase + 0x132475E));
 
+			stl::write_vfunc<0x1, BSImagespaceShader_Render_ISDepthOfFieldFogged>(RE::VTABLE_BSImagespaceShaderDepthOfFieldFogged[3]);
 
 
 			// Setup our own jitters
